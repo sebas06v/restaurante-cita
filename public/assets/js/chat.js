@@ -33,18 +33,27 @@ let sendBtn;
 let suggestHost;
 let launcher;
 
+/** ¿Estamos en la máquina del desarrollador o en el sitio de verdad? */
+const enLocal = ['localhost', '127.0.0.1', '::1', ''].includes(location.hostname);
+
 boot();
 
 async function boot() {
   if (!document.querySelector('#reservar')) return; // solo en el sitio público
-  build();
-  restore();
 
   try {
     state.info = await api('/api/chat/info');
   } catch {
     state.info = { enabled: false };
   }
+
+  // Chat apagado en un sitio publicado: no se dibuja nada. El huésped no
+  // tiene por qué ver un botón que no responde ni cómo se configura el
+  // servidor; reserva por el formulario, que funciona igual.
+  if (!state.info.enabled && !enLocal) return;
+
+  build();
+  restore();
   paintStatus();
 }
 
@@ -167,12 +176,17 @@ function paintStatus() {
   sendBtn.disabled = true;
   if (state.open && !log.querySelector('.msg-error')) {
     log.append(
-      node(`<div class="msg msg-error">
-        El chat con IA no está encendido en este servidor. Se prende con una llave de DeepSeek:
-        copie <code>.env.example</code> a <code>.env</code>, ponga la llave en
-        <code>DEEPSEEK_API_KEY</code> y relance <code>npm start</code>.
-        Mientras tanto puede reservar en el formulario de arriba o llamarnos al +57 601 742 9080.
-      </div>`)
+      node(
+        enLocal
+          ? `<div class="msg msg-error">
+              Falta la llave de DeepSeek. Copie <code>.env.example</code> a <code>.env</code>,
+              ponga <code>DEEPSEEK_API_KEY</code> y relance <code>npm start</code>.
+            </div>`
+          : `<div class="msg msg-error">
+              El chat no está disponible en este momento. Puede reservar en el formulario de
+              arriba, o si prefiere hablar con alguien, llámenos al +57 601 742 9080.
+            </div>`
+      )
     );
   }
 }

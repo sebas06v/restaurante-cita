@@ -336,7 +336,14 @@ server.listen(PORT, HOST, () => {
     }`
   );
   if (!chat.enabled) {
-    console.log('                  copie .env.example a .env, ponga su llave y relance npm start');
+    console.log(
+      deployed
+        ? '                  FALTA DEEPSEEK_API_KEY en las variables del servidor:'
+        : '                  copie .env.example a .env, ponga su llave y relance npm start'
+    );
+    if (deployed) {
+      console.log('                  el sitio funciona, pero el chat no aparece para los visitantes');
+    }
   }
   console.log('');
 });

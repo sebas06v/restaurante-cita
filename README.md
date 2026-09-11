@@ -167,8 +167,10 @@ arranque dice en qué estado quedó:
 Chat con IA     activo · deepseek/deepseek-chat · 9 herramientas · solo El Guayacán
 ```
 
-Sin llave el sitio funciona igual: el widget avisa y la reserva por formulario no
-se toca.
+Sin llave, el comportamiento depende de dónde corra: **en un sitio publicado el
+botón del chat no se dibuja** —el huésped no tiene por qué ver un botón que no
+responde, ni cómo se configura el servidor— y en local sí aparece, con la pista
+de qué falta. La reserva por formulario no se toca en ningún caso.
 
 Ajustes: `DEEPSEEK_MODEL` (default `deepseek-chat`), `DEEPSEEK_TEMPERATURE`
 (`0.3`) y `DEEPSEEK_BASE_URL`.
@@ -198,7 +200,7 @@ Dos variables se ponen a mano en el panel de Render (nunca en el repo):
 
 | Variable | Para qué |
 | --- | --- |
-| `DEEPSEEK_API_KEY` | enciende el chat. Sin ella el sitio funciona igual, solo sin Sofía |
+| `DEEPSEEK_API_KEY` | **enciende el chat.** Sin ella el botón de Sofía no aparece en el sitio publicado: un chat muerto es peor que ninguno. El resto del sitio funciona igual |
 | `GUAYACAN_PIN` | PIN del panel de sala. Si no la define, la app genera uno al azar y lo imprime en el log de arranque |
 
 `HOST=0.0.0.0` y `NODE_ENV=production` ya vienen en el blueprint. `HOST` es
