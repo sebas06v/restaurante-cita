@@ -35,7 +35,19 @@ try {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const PORT = Number(process.env.PORT) || 4321;
-const HOST = process.env.HOST || '127.0.0.1';
+
+/**
+ * En local escuchamos solo en 127.0.0.1: nadie más en la red ve la app.
+ *
+ * Desplegado hay que escuchar en todas las interfaces. Si el proceso queda
+ * atado a 127.0.0.1 dentro de un contenedor, el puerto solo se ve desde
+ * adentro: Render (o Railway, o Fly) lo escanea desde afuera, no encuentra
+ * nada y el despliegue se cuelga en «Deploying…» hasta que expira.
+ *
+ * La señal de que estamos en un PaaS es que el puerto lo impone el entorno.
+ */
+const deployed = Boolean(process.env.PORT || process.env.RENDER || process.env.NODE_ENV === 'production');
+const HOST = process.env.HOST || (deployed ? '0.0.0.0' : '127.0.0.1');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',

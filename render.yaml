@@ -5,7 +5,7 @@ services:
     runtime: node
     plan: free
     # Cero dependencias: no hay nada que instalar ni que compilar.
-    buildCommand: npm ci --omit=dev || true
+    buildCommand: echo "Cero dependencias: nada que instalar."
     startCommand: npm start
     healthCheckPath: /api/config
     envVars:
