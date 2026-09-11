@@ -19,7 +19,16 @@
  * ==========================================================================
  */
 
-import { RESTAURANT, ZONES, MENU, OCCASIONS, PREFERENCES, EXPERIENCES, SERVICE_HOURS } from './config.js';
+import {
+  RESTAURANT,
+  ZONES,
+  MENU,
+  OCCASIONS,
+  PREFERENCES,
+  EXPERIENCES,
+  SERVICE_HOURS,
+  PAGO
+} from './config.js';
 import { todayISO, addDays, prettyDate, weekday } from './time.js';
 import * as api from './api.js';
 
@@ -312,6 +321,14 @@ async function runTool(name, input) {
         mesa: r.tableId,
         turno_minutos: r.turnMinutes,
         estado: r.status,
+        pago: r.pago && r.pago.requerido
+          ? {
+              monto: r.pago.monto,
+              estado: r.pago.estado,
+              enlace: '/?pagar=' + r.code,
+              nota: 'La mesa queda apartada; solo se confirma cuando se reciba el pago.'
+            }
+          : undefined,
         requiere_garantia: r.deposit,
         extras: r.estimate.extras + r.estimate.surcharge,
         calendario: `/api/reservations/${r.code}/ics`,
@@ -461,6 +478,9 @@ Español colombiano, cálido y directo, de usted. Nunca asumas el género del hu
 7. Desde ${RESTAURANT.depositFrom} personas la reserva queda por confirmar mientras la casa llama por la garantía. Dilo al confirmar.
 8. Nunca inventes platos, precios, políticas ni números de mesa. Si no lo sabes, consúltalo con una herramienta o dilo.
 9. Cuando entregues un código de reserva, escríbelo tal cual, con el formato GY-XXXX.
+10. ${PAGO.activo
+    ? `Reservar cuesta ${PAGO.monto.toLocaleString('es-CO')} pesos por reserva, que se abonan al consumo. Avísalo ANTES de crear la reserva, no después. Al confirmar, dile que la mesa queda apartada y que se cierra cuando pague, y que el botón de pago le aparece ahí mismo en la página.`
+    : 'Reservar no tiene costo.'}
 
 ## La casa
 Horarios:

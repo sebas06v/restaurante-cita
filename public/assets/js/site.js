@@ -748,18 +748,25 @@ async function submitBooking() {
     };
     const { reservation } = await api('/api/reservations', { method: 'POST', body: payload });
     state.reservation = reservation;
-    renderSuccess(reservation);
-    $$('.panel').forEach((p) => {
-      p.hidden = p.dataset.panel !== 'ok';
-    });
-    $$('#steps li').forEach((li) => {
-      li.classList.remove('is-active');
-      li.classList.add('is-done');
-    });
-    window.scrollTo({ top: $('#reservar').offsetTop - 80, behavior: 'smooth' });
-    toast('Reserva confirmada. Le enviamos el detalle al correo.', 'ok', 7000);
+
+    // Con cobro, la mesa queda apartada pero no en firme: primero el pago y
+    // solo despues la pantalla de confirmacion.
+    const pendiente = reservation.pago && reservation.pago.requerido && reservation.pago.estado !== 'pagado';
+    if (pendiente) {
+      await renderPayment(reservation.code);
+      showPanel('pago');
+      toast('Mesa apartada. Complete el pago para dejarla en firme.', 'ok', 7000);
+    } else {
+      renderSuccess(reservation);
+      showPanel('ok');
+      toast('Reserva confirmada. Le enviamos el detalle al correo.', 'ok', 7000);
+    }
   } catch (err) {
-    const alts = err.data.alternatives || [];
+    // Un fallo de la API trae `data` con alternativas; un fallo de código no
+    // trae nada. Antes se asumía lo primero y el propio catch reventaba,
+    // escondiendo el error de verdad.
+    console.error('[reserva]', err);
+    const alts = err.data?.alternatives || [];
     if (alts.length) {
       toast(err.message, 'error', 8000);
       state.availability = null;
@@ -785,7 +792,155 @@ async function submitBooking() {
   }
 }
 
-function renderSuccess(r) {
+/** Salta a un panel, cierra el resto y marca los pasos como hechos. */
+function showPanel(name) {
+  $$('.panel').forEach((p) => {
+    p.hidden = p.dataset.panel !== name;
+  });
+  $$('#steps li').forEach((li) => {
+    li.classList.remove('is-active');
+    li.classList.add('is-done');
+  });
+  window.scrollTo({ top: $('#reservar').offsetTop - 80, behavior: 'smooth' });
+}
+
+/* ============================================================== pago == */
+
+/**
+ * Pantalla de pago. Es una simulacion y lo dice de frente: no se cobra nada
+ * y no se pide ningun dato de tarjeta. Solo el metodo y, para poder probar
+ * los dos caminos, el desenlace, igual que el sandbox de una pasarela.
+ */
+async function renderPayment(code) {
+  const host = $('#payHost');
+  fill(host, '<div class="skeleton" style="height:14rem"></div>');
+
+  let data;
+  try {
+    data = await api(`/api/payments/${code}`);
+  } catch (err) {
+    fill(host, `<div class="notice"><strong>${esc(err.message)}</strong></div>`);
+    return;
+  }
+
+  state.pay = { code, metodo: data.metodos[0].id, resultado: 'aprobado' };
+
+  fill(
+    host,
+    `<div class="pay">
+      <p class="eyebrow">Paso final</p>
+      <h3 class="panel-title">Confirme su mesa con ${money(data.pago.monto)}</h3>
+
+      <div class="pay-sim">
+        <strong>Pago de demostración</strong>
+        No se cobra dinero real y no le pedimos datos de tarjeta. Escoja el método y el
+        desenlace que quiera probar.
+      </div>
+
+      <div class="pay-grid">
+        <div class="pay-resumen">
+          <div class="rail-line"><span>Reserva</span><span class="mono">${esc(data.code)}</span></div>
+          <div class="rail-line"><span>A nombre de</span><span>${esc(data.nombre)}</span></div>
+          <div class="rail-line"><span>Cuándo</span><span>${esc(data.cuando)}</span></div>
+          <div class="rail-line"><span>Personas</span><span>${data.personas}</span></div>
+          <div class="review-total"><span>A pagar ahora</span><span>${money(data.pago.monto)}</span></div>
+          ${data.abonable ? '<p class="block-note">Se abona a su consumo esa noche.</p>' : ''}
+        </div>
+
+        <div class="pay-form">
+          <div class="block">
+            <div class="block-head"><h4>Método de pago</h4></div>
+            <div class="chips" id="payMetodos" role="group" aria-label="Método de pago">
+              ${data.metodos
+                .map(
+                  (m, i) => `<button class="chip" type="button" data-metodo="${m.id}"
+                    aria-pressed="${i === 0}">${esc(m.label)}</button>`
+                )
+                .join('')}
+            </div>
+            <p class="block-note" id="payMetodoNota">${esc(data.metodos[0].detalle)}</p>
+          </div>
+
+          <div class="block">
+            <div class="block-head"><h4>Desenlace a simular</h4></div>
+            <div class="chips" id="payResultado" role="group" aria-label="Resultado del pago">
+              <button class="chip" type="button" data-resultado="aprobado" aria-pressed="true">Aprobado</button>
+              <button class="chip" type="button" data-resultado="rechazado" aria-pressed="false">Rechazado</button>
+            </div>
+          </div>
+
+          <div id="payError"></div>
+
+          <footer class="panel-foot">
+            <span class="panel-hint">La mesa está apartada mientras paga.</span>
+            <button class="btn btn-ghost" type="button" data-action="pay-later">Pagar después</button>
+            <button class="btn btn-gold btn-lg" type="button" id="payNow">Pagar ${money(data.pago.monto)}</button>
+          </footer>
+        </div>
+      </div>
+    </div>`
+  );
+
+  $('#payMetodos').onclick = (e) => {
+    const btn = e.target.closest('[data-metodo]');
+    if (!btn) return;
+    state.pay.metodo = btn.dataset.metodo;
+    $$('#payMetodos [data-metodo]').forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+    const m = data.metodos.find((x) => x.id === btn.dataset.metodo);
+    $('#payMetodoNota').textContent = m ? m.detalle : '';
+  };
+
+  $('#payResultado').onclick = (e) => {
+    const btn = e.target.closest('[data-resultado]');
+    if (!btn) return;
+    state.pay.resultado = btn.dataset.resultado;
+    $$('#payResultado [data-resultado]').forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+  };
+
+  $('#payNow').onclick = payNow;
+  $('[data-action="pay-later"]', host).onclick = () => {
+    renderSuccess({ ...state.reservation, pago: data.pago });
+    showPanel('ok');
+    toast('Le guardamos la mesa. Puede pagar desde «Mi reserva».', 'ok', 7000);
+  };
+}
+
+async function payNow() {
+  const btn = $('#payNow');
+  btn.disabled = true;
+  btn.textContent = 'Procesando…';
+  fill($('#payError'), '');
+
+  try {
+    const res = await api(`/api/payments/${state.pay.code}`, {
+      method: 'POST',
+      body: { metodo: state.pay.metodo, resultado: state.pay.resultado }
+    });
+    state.reservation = res.reservation;
+    renderSuccess(res.reservation, res.recibo);
+    showPanel('ok');
+    toast(res.message, 'ok', 7000);
+  } catch (err) {
+    fill(
+      $('#payError'),
+      `<div class="notice">
+        <strong>${esc(err.message)}</strong>
+        <span>La mesa sigue apartada. Pruebe con otro método, o cambie el desenlace a «Aprobado».</span>
+      </div>`
+    );
+    btn.disabled = false;
+    btn.textContent = 'Reintentar el pago';
+  }
+}
+
+/** El estado de la reserva en palabras del huésped. */
+function estadoBonito(r) {
+  if (r.status === 'pendiente-pago') return 'Por pagar';
+  if (r.status === 'pendiente') return 'Por confirmar garantía';
+  return 'Confirmada';
+}
+
+function renderSuccess(r, recibo = null) {
   fill(
     $('#successHost'),
     `<div class="success">
@@ -804,8 +959,27 @@ function renderSuccess(r) {
         <div><strong>Cuándo</strong>${esc(prettyDate(r.date))}, ${prettyTime(r.time)}</div>
         <div><strong>Dónde</strong>${esc(r.zoneName)} · mesa ${esc(r.tableId)}</div>
         <div><strong>Mesa reservada</strong>${turnText(r.turnMinutes)}</div>
-        <div><strong>Estado</strong>${r.status === 'pendiente' ? 'Por confirmar garantía' : 'Confirmada'}</div>
+        <div><strong>Estado</strong>${estadoBonito(r)}</div>
+        ${
+          recibo
+            ? `<div><strong>Pago</strong>${money(recibo.monto)} · ${esc(recibo.metodo)}<br />
+                <span class="mono" style="font-size:0.72rem">${esc(recibo.referencia)}</span></div>`
+            : r.pago && r.pago.requerido && r.pago.estado !== 'pagado'
+              ? '<div><strong>Pago</strong>Pendiente</div>'
+              : ''
+        }
       </div>
+      ${
+        r.pago && r.pago.requerido && r.pago.estado !== 'pagado'
+          ? `<div class="notice" style="text-align:left;max-width:34rem;margin:1rem auto 0">
+              <strong>Falta el pago de ${money(r.pago.monto)}</strong>
+              <span>Le apartamos la mesa, pero solo queda en firme cuando se reciba el pago.</span>
+              <div class="notice-actions">
+                <button class="btn btn-sm btn-gold" type="button" data-pagar="${esc(r.code)}">Pagar ahora</button>
+              </div>
+            </div>`
+          : ''
+      }
       ${
         r.deposit
           ? `<p class="block-note">Por ser un grupo de ${r.party}, lo llamamos hoy mismo al ${esc(
@@ -829,6 +1003,11 @@ function renderSuccess(r) {
     if (ics) download(`/api/reservations/${ics.dataset.ics}/ics`);
     const cp = e.target.closest('[data-copy]');
     if (cp) toast((await copy(cp.dataset.copy)) ? 'Código copiado.' : 'No pudimos copiar.', 'ok');
+    const pagar = e.target.closest('[data-pagar]');
+    if (pagar) {
+      await renderPayment(pagar.dataset.pagar);
+      showPanel('pago');
+    }
     if (e.target.closest('[data-action="restart"]')) window.location.reload();
   };
 }
@@ -1097,18 +1276,36 @@ function renderFound(list, host) {
           <span class="badge ${
             r.status === 'cancelada'
               ? 'badge-danger'
-              : r.status === 'pendiente'
+              : r.status === 'pendiente-pago'
                 ? 'badge-warn'
-                : r.status === 'completada'
-                  ? 'badge-info'
-                  : 'badge-ok'
+                : r.status === 'pendiente'
+                ? 'badge-warn'
+                  : r.status === 'completada'
+                    ? 'badge-info'
+                    : 'badge-ok'
           }">${esc(statusLabel(r.status))}</span>
         </div>
+        ${
+          r.pago && r.pago.requerido
+            ? `<p class="found-meta">Pago: ${
+                r.pago.estado === 'pagado'
+                  ? `${money(r.pago.monto)} recibido${r.pago.metodoLabel ? ` por ${esc(r.pago.metodoLabel)}` : ''}`
+                  : `<strong style="color:var(--gold-300)">pendiente, ${money(r.pago.monto)}</strong>`
+              }</p>`
+            : ''
+        }
         ${r.occasion !== 'ninguna' ? `<p class="found-meta">Celebran: ${esc(r.occasionLabel)}</p>` : ''}
         ${r.preferenceLabels.length ? `<p class="found-meta">${esc(r.preferenceLabels.join(' · '))}</p>` : ''}
         ${
-          ['pendiente', 'confirmada'].includes(r.status)
+          ['pendiente-pago', 'pendiente', 'confirmada'].includes(r.status)
             ? `<div class="found-actions">
+                ${
+                  r.pago && r.pago.requerido && r.pago.estado !== 'pagado'
+                    ? `<button class="btn btn-sm btn-gold" type="button" data-pagar-lookup="${esc(r.code)}">Pagar ${money(
+                        r.pago.monto
+                      )}</button>`
+                    : ''
+                }
                 <button class="btn btn-sm" type="button" data-edit="${esc(r.code)}">Cambiar fecha u hora</button>
                 <button class="btn btn-sm" type="button" data-ics="${esc(r.code)}">Calendario</button>
                 <button class="btn btn-sm btn-danger" type="button" data-cancel="${esc(r.code)}">Cancelar</button>
@@ -1139,6 +1336,14 @@ function renderFound(list, host) {
       } catch (err) {
         toast(err.message, 'error');
       }
+    }
+
+    const pagar = e.target.closest('[data-pagar-lookup]');
+    if (pagar) {
+      $('#lookupDialog').close();
+      await renderPayment(pagar.dataset.pagarLookup);
+      showPanel('pago');
+      return;
     }
 
     const edit = e.target.closest('[data-edit]');

@@ -764,3 +764,17 @@
     justify-content: flex-start;
   }
 }
+
+
+/* Etiquetas de cobro en la lista del día */
+.tag-due {
+  border-color: color-mix(in oklab, var(--terra-500) 60%, transparent);
+  background: color-mix(in oklab, var(--terra-500) 18%, transparent);
+  color: #ffd0bd;
+}
+
+.tag-paid {
+  border-color: color-mix(in oklab, var(--verde-400) 55%, transparent);
+  background: color-mix(in oklab, var(--verde-500) 18%, transparent);
+  color: #c6ecd8;
+}

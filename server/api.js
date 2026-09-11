@@ -14,7 +14,9 @@ import {
   SERVICE_HOURS,
   ACTIVE_STATUSES,
   ADMIN_PIN,
-  PIN_IS_DEMO
+  PIN_IS_DEMO,
+  PAGO,
+  requierePago
 } from './config.js';
 import { db, write, nextId, makeCode, logEvent } from './db.js';
 import {
@@ -69,7 +71,8 @@ export function getConfig() {
     statuses: STATUSES,
     hours: Object.entries(SERVICE_HOURS).map(([day, services]) => ({ day: Number(day), services })),
     today: todayISO(),
-    demoPin: PIN_IS_DEMO
+    demoPin: PIN_IS_DEMO,
+    pago: PAGO
   });
 }
 
@@ -230,9 +233,30 @@ function publicReservation(r) {
     experienceDetail: EXPERIENCES.filter((e) => (r.experiences || []).includes(e.id)),
     preferenceLabels: PREFERENCES.filter((p) => (r.preferences || []).includes(p.id)).map((p) => p.label),
     occasionLabel: (OCCASIONS.find((o) => o.id === r.occasion) || OCCASIONS[0]).label,
-    estimate: estimateTotal(r)
+    estimate: estimateTotal(r),
+    pago: cobroDe(r)
   };
 }
+
+/* ═══════════════════════════════════════════════════════════════ cobro ══ */
+
+/** El cobro con el que nace una reserva. */
+function nuevoCobro(party) {
+  const requerido = requierePago(party);
+  return {
+    requerido,
+    monto: requerido ? PAGO.monto : 0,
+    moneda: PAGO.moneda,
+    estado: requerido ? 'pendiente' : 'no-aplica',
+    metodo: null,
+    referencia: null,
+    simulado: PAGO.modo === 'simulado',
+    at: null
+  };
+}
+
+/** Cobro de una reserva vieja, creada antes de que existiera el pago. */
+const cobroDe = (r) => r.pago || { requerido: false, monto: 0, estado: 'no-aplica', moneda: PAGO.moneda };
 
 /** Estimado de garantía / extras: no cobra nada, solo informa. */
 function estimateTotal(r) {
@@ -291,6 +315,8 @@ export async function createReservation({ body, admin = false }) {
     });
   }
 
+  const cobro = nuevoCobro(party);
+
   const reservation = {
     id: nextId('RES'),
     code: makeCode(state.reservations),
@@ -302,7 +328,17 @@ export async function createReservation({ body, admin = false }) {
     turnMinutes: turnMinutes(party),
     ...guest,
     ...extras,
-    status: admin ? 'confirmada' : party >= RESTAURANT.depositFrom ? 'pendiente' : 'confirmada',
+    // Por web, sin pagar no hay mesa en firme. Por teléfono la cobra el
+    // equipo en el restaurante, así que la reserva queda confirmada y el
+    // cobro pendiente.
+    status: cobro.requerido && !admin
+      ? 'pendiente-pago'
+      : admin
+        ? 'confirmada'
+        : party >= RESTAURANT.depositFrom
+          ? 'pendiente'
+          : 'confirmada',
+    pago: cobro,
     source: admin ? 'telefono' : 'web',
     deposit: party >= RESTAURANT.depositFrom,
     createdAt: new Date().toISOString(),
@@ -721,3 +757,125 @@ export async function adminWaitlist({ method, params, body }) {
 }
 
 export { ApiError };
+
+/* ══════════════════════════════════════════════════════════════ pagos ══ */
+
+/**
+ * Estado del cobro de una reserva. Lo consulta la pantalla de pago.
+ */
+export function getPayment({ params }) {
+  const r = findByCode(params.code);
+  const pago = cobroDe(r);
+  return ok({
+    code: r.code,
+    nombre: r.name,
+    personas: r.party,
+    cuando: `${prettyDate(r.date, true)}, ${prettyTime(r.time)}`,
+    estadoReserva: r.status,
+    pago,
+    metodos: PAGO.metodos,
+    abonable: PAGO.abonable,
+    simulado: PAGO.modo === 'simulado'
+  });
+}
+
+/**
+ * Paga la reserva. En modo simulado NO se mueve dinero y no se recibe ningún
+ * dato de tarjeta: el cliente solo dice con qué método y qué desenlace quiere
+ * probar (aprobado o rechazado), como el sandbox de cualquier pasarela.
+ *
+ * Cuando se conecte una pasarela de verdad, esta función es la que cambia:
+ * crea la transacción, redirige al checkout y confirma por webhook. El resto
+ * del flujo —estados, recibo, panel— ya queda hecho.
+ */
+export async function payReservation({ params, body }) {
+  if (PAGO.modo !== 'simulado') {
+    throw new ApiError(501, 'Solo está habilitado el pago simulado.');
+  }
+
+  const r = findByCode(params.code);
+  const pago = cobroDe(r);
+
+  if (!pago.requerido) throw new ApiError(409, 'Esta reserva no tiene nada que pagar.');
+  if (pago.estado === 'pagado') return ok({ reservation: publicReservation(r), message: 'Ya estaba pagada.' });
+  if (['cancelada', 'no-show', 'completada'].includes(r.status)) {
+    throw new ApiError(409, 'Esa reserva ya se cerró.');
+  }
+
+  const metodo = PAGO.metodos.find((m) => m.id === body.metodo);
+  if (!metodo) bad('Escoja un método de pago.', { field: 'metodo' });
+
+  // El desenlace lo pide quien prueba. Por defecto, aprobado.
+  const rechazar = body.resultado === 'rechazado';
+  const at = new Date().toISOString();
+  const referencia = `SIM-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+
+  await write(() => {
+    r.pago = {
+      ...pago,
+      estado: rechazar ? 'rechazado' : 'pagado',
+      metodo: metodo.id,
+      metodoLabel: metodo.label,
+      referencia,
+      simulado: true,
+      at
+    };
+    // Pagada, la mesa queda en firme. Rechazada, sigue esperando el pago.
+    if (!rechazar) r.status = 'confirmada';
+    r.updatedAt = at;
+    r.history.push({
+      at,
+      action: rechazar ? `pago rechazado (${metodo.label})` : `pagado ${pago.monto} por ${metodo.label}`,
+      by: 'pasarela simulada'
+    });
+    logEvent({ action: rechazar ? 'pago-rechazado' : 'pago-recibido', code: r.code, monto: pago.monto, metodo: metodo.id });
+  });
+
+  if (rechazar) {
+    throw new ApiError(402, `El pago con ${metodo.label} fue rechazado. Intente con otro método.`, {
+      reservation: publicReservation(r)
+    });
+  }
+
+  return ok({
+    reservation: publicReservation(r),
+    recibo: {
+      referencia,
+      monto: pago.monto,
+      moneda: pago.moneda,
+      metodo: metodo.label,
+      at,
+      code: r.code,
+      simulado: true
+    },
+    message: 'Pago recibido. Su mesa quedó confirmada.'
+  });
+}
+
+/** El equipo marca el cobro a mano: pagos en efectivo, datáfono o teléfono. */
+export async function adminMarkPayment({ params, body }) {
+  const state = db();
+  const r = state.reservations.find((x) => x.id === params.id || x.code === params.id);
+  if (!r) throw new ApiError(404, 'Reserva no encontrada.');
+
+  const estados = ['pendiente', 'pagado', 'rechazado', 'reembolsado', 'no-aplica'];
+  if (!estados.includes(body.estado)) bad(`Estado de pago inválido. Use: ${estados.join(', ')}.`);
+
+  const at = new Date().toISOString();
+  await write(() => {
+    r.pago = {
+      ...cobroDe(r),
+      estado: body.estado,
+      metodo: body.metodo || 'mostrador',
+      metodoLabel: body.metodo === 'efectivo' ? 'Efectivo' : 'En el restaurante',
+      referencia: cobroDe(r).referencia || `MAN-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+      at
+    };
+    if (body.estado === 'pagado' && r.status === 'pendiente-pago') r.status = 'confirmada';
+    r.updatedAt = at;
+    r.history.push({ at, action: `cobro marcado como ${body.estado}`, by: 'equipo' });
+    logEvent({ action: 'cobro-manual', code: r.code, estado: body.estado });
+  });
+
+  return ok({ reservation: publicReservation(r) });
+}

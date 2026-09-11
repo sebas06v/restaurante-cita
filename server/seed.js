@@ -3,7 +3,7 @@
  * se vean como un restaurante que ya está operando.
  * Generador determinista (LCG) para que cada arranque limpio sea igual.
  */
-import { OCCASIONS, PREFERENCES, EXPERIENCES, ZONES } from './config.js';
+import { OCCASIONS, PREFERENCES, EXPERIENCES, ZONES, PAGO, requierePago } from './config.js';
 import { todayISO, addDays, nowMinutes, toMinutes, weekday } from './time.js';
 import { servicesFor, freeTables, turnMinutes } from './availability.js';
 
@@ -99,12 +99,37 @@ export function seedReservations() {
         let status;
         if (offset < 0) status = chance(0.08) ? 'no-show' : chance(0.06) ? 'cancelada' : 'completada';
         else if (offset > 0) status = chance(0.2) ? 'pendiente' : 'confirmada';
+        // el ajuste por cobro se aplica más abajo, cuando ya se sabe si pagó
         else {
           const start = toMinutes(time);
           const dur = turnMinutes(party);
           if (minuteNow > start + dur) status = chance(0.1) ? 'no-show' : 'completada';
           else if (minuteNow >= start) status = 'sentada';
           else status = chance(0.15) ? 'pendiente' : 'confirmada';
+        }
+
+        // El cobro de la reserva. Lo viejo está pagado, lo de hoy y lo que
+        // viene tiene una parte sin pagar, que es lo realista.
+        const cobra = requierePago(party);
+        const pagado = cobra && (offset < 0 ? !chance(0.05) : chance(0.72));
+        const metodo = pick(PAGO.metodos);
+        const pago = cobra
+          ? {
+              requerido: true,
+              monto: PAGO.monto,
+              moneda: PAGO.moneda,
+              estado: pagado ? 'pagado' : 'pendiente',
+              metodo: pagado ? metodo.id : null,
+              metodoLabel: pagado ? metodo.label : null,
+              referencia: pagado ? `SIM-${Math.random().toString(36).slice(2, 8).toUpperCase()}` : null,
+              simulado: true,
+              at: pagado ? new Date().toISOString() : null
+            }
+          : { requerido: false, monto: 0, moneda: PAGO.moneda, estado: 'no-aplica' };
+
+        // Sin pagar y todavía por venir: la mesa está apartada, no en firme.
+        if (cobra && !pagado && offset >= 0 && !['no-show', 'cancelada'].includes(status)) {
+          status = 'pendiente-pago';
         }
 
         counter += 1;
@@ -125,6 +150,7 @@ export function seedReservations() {
           experiences: exps,
           notes: pick(NOTAS),
           status,
+          pago,
           source: chance(0.7) ? 'web' : 'telefono',
           deposit: party >= 8,
           createdAt: new Date(Date.now() - int(1, 20) * 86400000).toISOString(),

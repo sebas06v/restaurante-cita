@@ -75,6 +75,8 @@ route('GET', '/api/floor', api.getFloor);
 
 route('POST', '/api/reservations', api.createReservation);
 route('POST', '/api/waitlist', api.joinWaitlist);
+route('GET', '/api/payments/:code', api.getPayment);
+route('POST', '/api/payments/:code', api.payReservation);
 route('GET', '/api/reservations/lookup', api.lookupReservation);
 route('GET', '/api/reservations/:code/ics', api.reservationCalendarFile);
 route('GET', '/api/reservations/:code', api.lookupReservation);
@@ -88,6 +90,7 @@ route('GET', '/api/admin/waitlist', api.adminWaitlist, { admin: true });
 route('PATCH', '/api/admin/waitlist/:id', api.adminWaitlist, { admin: true });
 route('POST', '/api/admin/reservations', (ctx) => api.createReservation({ ...ctx, admin: true }), { admin: true });
 route('PATCH', '/api/admin/reservations/:id', api.adminUpdateReservation, { admin: true });
+route('PATCH', '/api/admin/payments/:id', api.adminMarkPayment, { admin: true });
 route('POST', '/api/admin/blocks', api.adminCreateBlock, { admin: true });
 route('DELETE', '/api/admin/blocks/:id', api.adminDeleteBlock, { admin: true });
 

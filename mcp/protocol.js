@@ -303,6 +303,13 @@ const TOOLS = [
         lines.push(`Experiencias: ${r.experienceDetail.map((x) => x.name).join(', ')} (${money(r.estimate.extras)})`);
       }
       if (r.preferenceLabels.length) lines.push(`Preferencias: ${r.preferenceLabels.join(', ')}`);
+      if (r.pago && r.pago.requerido) {
+        lines.push(
+          r.pago.estado === 'pagado'
+            ? `Pago recibido: ${money(r.pago.monto)}.`
+            : `Falta el pago de ${money(r.pago.monto)}: la mesa queda apartada y solo se cierra al pagar.`
+        );
+      }
       if (r.deposit) lines.push(`Grupo grande: la casa llama al ${r.phone} para coordinar la garantía.`);
       lines.push('', `Calendario: ${BASE}/api/reservations/${r.code}/ics`);
       return { text: lines.join('\n'), data };

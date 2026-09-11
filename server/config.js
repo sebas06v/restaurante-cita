@@ -404,7 +404,48 @@ export const MENU = [
   }
 ];
 
+/**
+ * ==========================================================================
+ * Cobro de la reserva
+ * ==========================================================================
+ * Un valor fijo por reserva, no por persona: es una cuota de garantía para
+ * evitar el no-show, abonable al consumo.
+ *
+ * El modo es SIMULADO: no hay pasarela, no se mueve dinero y la pantalla de
+ * pago lo dice. Toda la lógica alrededor (estado, recibo, reflejo en el
+ * panel) es la de verdad, así que conectar Wompi o Mercado Pago después es
+ * cambiar una función, no rehacer el flujo.
+ *
+ * Se ajusta desde el entorno, sin tocar código:
+ *   GUAYACAN_PAGO_MONTO   valor en pesos (default 30000)
+ *   GUAYACAN_PAGO_EXIGIR  todos | grandes | ninguno (default todos)
+ */
+export const PAGO = {
+  activo: process.env.GUAYACAN_PAGO_EXIGIR !== 'ninguno',
+  modo: 'simulado',
+  monto: Number(process.env.GUAYACAN_PAGO_MONTO) || 30000,
+  por: 'reserva',
+  exigir: process.env.GUAYACAN_PAGO_EXIGIR || 'todos',
+  moneda: 'COP',
+  abonable: true,
+  // Métodos que ofrece la pantalla de pago. Son los de una pasarela
+  // colombiana de verdad, para que el flujo se sienta real.
+  metodos: [
+    { id: 'pse', label: 'PSE', detalle: 'Débito desde su banco' },
+    { id: 'nequi', label: 'Nequi', detalle: 'Pago desde la app' },
+    { id: 'tarjeta', label: 'Tarjeta', detalle: 'Crédito o débito' }
+  ]
+};
+
+/** ¿Esta reserva tiene que pagar para quedar en firme? */
+export function requierePago(party) {
+  if (!PAGO.activo) return false;
+  if (PAGO.exigir === 'grandes') return party >= RESTAURANT.depositFrom;
+  return true;
+}
+
 export const STATUSES = [
+  { id: 'pendiente-pago', label: 'Por pagar' },
   { id: 'pendiente', label: 'Por confirmar' },
   { id: 'confirmada', label: 'Confirmada' },
   { id: 'sentada', label: 'En mesa' },
@@ -413,7 +454,11 @@ export const STATUSES = [
   { id: 'cancelada', label: 'Cancelada' }
 ];
 
-export const ACTIVE_STATUSES = ['pendiente', 'confirmada', 'sentada'];
+/**
+ * Estados que ocupan mesa. «pendiente-pago» cuenta: la mesa se aparta
+ * mientras el huésped paga, si no, dos personas pagarían por la misma.
+ */
+export const ACTIVE_STATUSES = ['pendiente-pago', 'pendiente', 'confirmada', 'sentada'];
 
 /**
  * PIN del panel de sala.

@@ -190,6 +190,37 @@ se devuelven con una sola frase. Y al revés, sigue respondiendo lo que sí es
 suyo — parqueadero, accesibilidad, horarios del domingo y recomendaciones de la
 carta con precios reales.
 
+## Cobro de la reserva
+
+Reservar cuesta un valor fijo por reserva —no por persona— que se abona al
+consumo. Es una cuota de garantía contra el no-show.
+
+**El pago es simulado**: no hay pasarela, no se mueve dinero y la pantalla lo
+dice de frente. Tampoco pide datos de tarjeta: se escoge el método (PSE, Nequi,
+tarjeta) y el desenlace que se quiere probar, como el sandbox de una pasarela
+de verdad.
+
+Toda la lógica alrededor sí es real, así que conectar Wompi o Mercado Pago
+después es cambiar una función (`payReservation` en `server/api.js`), no
+rehacer el flujo:
+
+- La reserva nace en estado **por pagar** y la mesa queda apartada —cuenta como
+  ocupada, para que dos personas no paguen por la misma.
+- Al pagar queda **confirmada** y se emite un recibo con referencia.
+- Si el pago se rechaza, la mesa sigue apartada y se puede reintentar.
+- Se puede pagar después desde «Mi reserva».
+- El panel de sala muestra lo **cobrado** y lo que está **por cobrar**, marca
+  con «sin pagar» a quien llega debiendo, y el equipo puede registrar el cobro
+  a mano para los pagos en el restaurante.
+- Sofía avisa el valor antes de crear la reserva, no después.
+
+Se ajusta desde el entorno, sin tocar código:
+
+| Variable | Default | Qué hace |
+| --- | --- | --- |
+| `GUAYACAN_PAGO_MONTO` | `30000` | Valor en pesos |
+| `GUAYACAN_PAGO_EXIGIR` | `todos` | `todos`, `grandes` (solo desde 8 personas) o `ninguno` (apaga el cobro) |
+
 ## Desplegar en Render
 
 El repositorio trae [`render.yaml`](render.yaml): en Render, **New → Blueprint**,
@@ -202,6 +233,8 @@ Dos variables se ponen a mano en el panel de Render (nunca en el repo):
 | --- | --- |
 | `DEEPSEEK_API_KEY` | **enciende el chat.** Sin ella el botón de Sofía no aparece en el sitio publicado: un chat muerto es peor que ninguno. El resto del sitio funciona igual |
 | `GUAYACAN_PIN` | PIN del panel de sala. Si no la define, la app genera uno al azar y lo imprime en el log de arranque |
+| `GUAYACAN_PAGO_MONTO` | Valor de la reserva. Default 30.000 |
+| `GUAYACAN_PAGO_EXIGIR` | `todos`, `grandes` o `ninguno` |
 
 `HOST=0.0.0.0` y `NODE_ENV=production` ya vienen en el blueprint. `HOST` es
 obligatorio: atado a `127.0.0.1` el health check de Render nunca pasa.

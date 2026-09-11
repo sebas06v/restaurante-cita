@@ -230,7 +230,13 @@ function renderDayHead() {
      <div class="kpi ${m.occupancy > 80 ? 'is-warn' : ''}"><b>${m.occupancy}%</b><span>ocupación</span></div>
      <div class="kpi"><b>${m.averageParty || '—'}</b><span>por mesa</span></div>
      <div class="kpi"><b>${m.byStatus.sentada || 0}</b><span>en mesa ahora</span></div>
-     <div class="kpi ${badStatus ? 'is-bad' : ''}"><b>${m.byStatus['no-show'] || 0}</b><span>no llegaron</span></div>`
+     <div class="kpi ${badStatus ? 'is-bad' : ''}"><b>${m.byStatus['no-show'] || 0}</b><span>no llegaron</span></div>
+     <div class="kpi"><b>${money(m.cobrado || 0)}</b><span>cobrado</span></div>
+     ${
+       m.porCobrar
+         ? `<div class="kpi is-warn"><b>${money(m.porCobrar)}</b><span>por cobrar</span></div>`
+         : ''
+     }`
   );
 }
 
@@ -394,6 +400,11 @@ function renderList() {
         const tags = [
           `<span class="tag">${esc(r.tableId)}</span>`,
           r.occasion !== 'ninguna' ? `<span class="tag tag-hot">${esc(r.occasionLabel)}</span>` : '',
+          r.pago && r.pago.requerido && r.pago.estado !== 'pagado'
+            ? '<span class="tag tag-due">sin pagar</span>'
+            : r.pago && r.pago.estado === 'pagado'
+              ? `<span class="tag tag-paid">${money(r.pago.monto)}</span>`
+              : '',
           r.deposit ? '<span class="tag tag-hot">garantía</span>' : '',
           ...r.preferenceLabels.slice(0, 2).map((p) => `<span class="tag">${esc(p)}</span>`),
           r.experiences.length ? `<span class="tag tag-hot">${r.experiences.length} exp.</span>` : '',
@@ -424,7 +435,7 @@ function renderList() {
 
 function badgeClass(status) {
   if (status === 'cancelada' || status === 'no-show') return 'badge-danger';
-  if (status === 'pendiente') return 'badge-warn';
+  if (status === 'pendiente' || status === 'pendiente-pago') return 'badge-warn';
   if (status === 'completada') return 'badge-info';
   return 'badge-ok';
 }
@@ -524,6 +535,16 @@ function renderNotes() {
   if (accesibles.length) notes.push(`${accesibles.length} con acceso en silla de ruedas: dejar paso libre.`);
   if (bebes.length) notes.push(`Alistar ${plural(bebes.length, 'silla', 'sillas')} para bebé.`);
   if (exps.length) notes.push(`${exps.length} mesas con experiencia contratada (avisar a barra y cocina).`);
+  const sinPagar = day.reservations.filter(
+    (r) => r.pago && r.pago.requerido && r.pago.estado !== 'pagado' && !['cancelada', 'no-show'].includes(r.status)
+  );
+  if (sinPagar.length) {
+    notes.push(
+      `${sinPagar.length} sin pagar (${money(
+        sinPagar.reduce((s, r) => s + r.pago.monto, 0)
+      )}): cobrar al llegar. ${sinPagar.map((r) => `${r.time} ${r.tableId}`).join(', ')}`
+    );
+  }
   if (day.waitlist.length) notes.push(`${day.waitlist.length} en lista de espera para hoy.`);
   if (!notes.length) notes.push('Servicio tranquilo, sin pendientes especiales.');
 
@@ -550,7 +571,23 @@ async function openDetail(code) {
       <div><strong>Correo</strong>${esc(r.email)}</div>
       <div><strong>Ocasión</strong>${esc(r.occasionLabel)}</div>
       <div><strong>Extras</strong>${money(r.estimate.extras + r.estimate.surcharge)}</div>
+      ${
+        r.pago && r.pago.requerido
+          ? `<div><strong>Cobro</strong>${money(r.pago.monto)} · ${esc(
+              r.pago.estado
+            )}${r.pago.referencia ? `<br /><span class="mono" style="font-size:0.68rem">${esc(r.pago.referencia)}</span>` : ''}</div>`
+          : ''
+      }
     </div>
+    ${
+      r.pago && r.pago.requerido && r.pago.estado !== 'pagado'
+        ? `<div class="table-move" style="margin-top:0;border-top:0;padding-top:0">
+            <button class="btn btn-sm btn-gold" type="button" data-cobrar="${esc(
+              r.code
+            )}">Marcar cobrado en el restaurante</button>
+          </div>`
+        : ''
+    }
     ${r.preferenceLabels.length ? `<p class="detail-notes"><b>Preferencias:</b> ${esc(r.preferenceLabels.join(' · '))}</p>` : ''}
     ${
       r.experienceDetail.length
@@ -600,6 +637,22 @@ async function openDetail(code) {
       await patchReservation(r.code, { status: st.dataset.status });
       dlg.close();
     }
+    const cobrar = e.target.closest('[data-cobrar]');
+    if (cobrar) {
+      try {
+        await api(`/api/admin/payments/${cobrar.dataset.cobrar}`, {
+          method: 'PATCH',
+          body: { estado: 'pagado', metodo: 'efectivo' },
+          admin: true
+        });
+        toast('Cobro registrado.', 'ok');
+        loadDay();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+      dlg.close();
+    }
+
     const move = e.target.closest('[data-move]');
     if (move) {
       await patchReservation(r.code, { tableId: $('#moveTable').value });

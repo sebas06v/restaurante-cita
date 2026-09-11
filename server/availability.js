@@ -230,10 +230,18 @@ export function dayMetrics({ date, reservations }) {
   // Aforo disponible = puestos x servicios del día (un turno por servicio).
   const capacity = seats * Math.max(1, services.length);
 
+  // Plata del día: lo cobrado y lo que falta por cobrar.
+  const cobros = held.map((r) => r.pago).filter((p) => p && p.requerido);
+  const cobrado = cobros.filter((p) => p.estado === 'pagado').reduce((s, p) => s + p.monto, 0);
+  const porCobrar = cobros.filter((p) => p.estado !== 'pagado').reduce((s, p) => s + p.monto, 0);
+
   return {
     date,
     total: day.length,
     covers,
+    cobrado,
+    porCobrar,
+    sinPagar: day.filter((r) => r.status === 'pendiente-pago').length,
     seats,
     byStatus: day.reduce((acc, r) => ({ ...acc, [r.status]: (acc[r.status] || 0) + 1 }), {}),
     occupancy: Math.min(100, Math.round((covers / capacity) * 100)),
