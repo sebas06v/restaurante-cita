@@ -1,0 +1,1984 @@
+{
+  "info": {
+    "_postman_id": "6756a23f-7394-48b1-be83-0068e0a6ba0c",
+    "name": "El Guayacán · MCP",
+    "description": "# El Guayacán · servidor MCP\n\nEl MCP del restaurante hablando por HTTP, para poder verlo y probarlo desde Postman.\n\n## Antes de empezar\n\n1. `npm start` en el proyecto. El restaurante queda en `http://127.0.0.1:4321`.\n2. Importe también el environment `el-guayacan.postman_environment.json`, o deje las variables\n   de la colección como están.\n3. Corra la carpeta **0 · Protocolo** de arriba abajo, y después **1 · Consultar**.\n\n## Cómo funciona\n\nTodo va a un solo endpoint, `POST {{baseUrl}}/mcp`, con un mensaje JSON-RPC 2.0 en el cuerpo:\n\n```json\n{ \"jsonrpc\": \"2.0\", \"id\": 1, \"method\": \"tools/call\",\n  \"params\": { \"name\": \"consultar_disponibilidad\", \"arguments\": { \"personas\": 4 } } }\n```\n\nEl `id` lo inyecta la colección (variable `rpcId`, sube sola en cada petición). El mismo catálogo\nse sirve por stdio en `mcp/server.js`, que es como lo levanta Claude Code: este endpoint HTTP\nexiste para depurar y para verlo aquí.\n\n## Variables que se llenan solas\n\n| Variable | Quién la escribe |\n| --- | --- |\n| `fecha`, `hora` | el test de `proximas_fechas_libres` (y un valor por defecto en el pre-request) |\n| `codigo` | el test de `crear_reserva` |\n| `codigoRest` | el test de `POST /api/reservations` |\n| `hoy` | el test de `GET /api/config` |\n| `rpcId` | el pre-request de la colección |\n\n## Ojo\n\nLas peticiones de la carpeta 2 y 3 **escriben en la agenda de verdad** (`data/db.json`).\nPara volver a empezar limpio: `npm run reset`.\n\nGenerada por `npm run postman` desde el catálogo real del MCP: 13 herramientas, 3 recursos, 3 prompts, 8 métodos.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// id incremental para cada mensaje JSON-RPC",
+          "const id = Number(pm.collectionVariables.get('rpcId') || 0) + 1;",
+          "pm.collectionVariables.set('rpcId', id);",
+          "",
+          "// Fechas por defecto, para que cualquier petición corra sola.",
+          "const iso = (d) => d.toISOString().slice(0, 10);",
+          "const hoy = new Date();",
+          "if (!pm.collectionVariables.get('hoy')) pm.collectionVariables.set('hoy', iso(hoy));",
+          "",
+          "if (!pm.collectionVariables.get('fecha')) {",
+          "  // el próximo día de servicio: los lunes la casa descansa",
+          "  const d = new Date(hoy);",
+          "  do { d.setDate(d.getDate() + 1); } while (d.getDay() === 1);",
+          "  pm.collectionVariables.set('fecha', iso(d));",
+          "}",
+          "if (!pm.collectionVariables.get('hora')) pm.collectionVariables.set('hora', '19:00');",
+          "",
+          "// el próximo lunes, para la petición de día cerrado",
+          "if (!pm.collectionVariables.get('lunes')) {",
+          "  const l = new Date(hoy);",
+          "  do { l.setDate(l.getDate() + 1); } while (l.getDay() !== 1);",
+          "  pm.collectionVariables.set('lunes', iso(l));",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:4321",
+      "type": "string"
+    },
+    {
+      "key": "pin",
+      "value": "2408",
+      "type": "string"
+    },
+    {
+      "key": "rpcId",
+      "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "hoy",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "fecha",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "hora",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "lunes",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "codigo",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "codigoRest",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "0 · Protocolo",
+      "description": "El saludo del MCP y su catálogo. `initialize` primero: es el que negocia la versión y le entrega al cliente las instrucciones del restaurante.",
+      "item": [
+        {
+          "name": "initialize",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('es JSON-RPC 2.0', () => pm.expect(cuerpo.jsonrpc).to.eql('2.0'));",
+                  "pm.test('sin error de protocolo', () => pm.expect(cuerpo.error, JSON.stringify(cuerpo.error)).to.be.undefined);",
+                  "pm.test('se presenta', () => pm.expect(cuerpo.result.serverInfo.name).to.eql('el-guayacan'));",
+                  "pm.test('trae instrucciones', () => pm.expect(cuerpo.result.instructions).to.be.a('string'));",
+                  "console.log(cuerpo.result.instructions);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": {{rpcId}},\n  \"method\": \"initialize\",\n  \"params\": {\n    \"protocolVersion\": \"2024-11-05\",\n    \"capabilities\": {\n      \"roots\": {\n        \"listChanged\": false\n      }\n    },\n    \"clientInfo\": {\n      \"name\": \"postman\",\n      \"version\": \"1.0.0\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "Handshake. Devuelve serverInfo, capacidades e instrucciones para el modelo."
+          },
+          "response": []
+        },
+        {
+          "name": "notifications/initialized",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('acepta sin responder (202)', () => pm.response.to.have.status(202));",
+                  "pm.test('cuerpo vacío', () => pm.expect(pm.response.text()).to.eql(''));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": {{rpcId}},\n  \"method\": \"notifications/initialized\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "Notificación: no lleva `id` y por eso no lleva respuesta. El servidor contesta 202 sin cuerpo."
+          },
+          "response": []
+        },
+        {
+          "name": "ping",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('es JSON-RPC 2.0', () => pm.expect(cuerpo.jsonrpc).to.eql('2.0'));",
+                  "pm.test('sin error de protocolo', () => pm.expect(cuerpo.error, JSON.stringify(cuerpo.error)).to.be.undefined);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": {{rpcId}},\n  \"method\": \"ping\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "Latido. Resultado vacío."
+          },
+          "response": []
+        },
+        {
+          "name": "tools/list",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('es JSON-RPC 2.0', () => pm.expect(cuerpo.jsonrpc).to.eql('2.0'));",
+                  "pm.test('sin error de protocolo', () => pm.expect(cuerpo.error, JSON.stringify(cuerpo.error)).to.be.undefined);",
+                  "pm.test('están las 13 herramientas', () => pm.expect(cuerpo.result.tools.length).to.eql(13));",
+                  "console.table(cuerpo.result.tools.map((t) => ({ herramienta: t.name, lectura: t.annotations.readOnlyHint })));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": {{rpcId}},\n  \"method\": \"tools/list\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "Las herramientas con su esquema de entrada y sus anotaciones (readOnlyHint, destructiveHint), que son las que hacen que un cliente pida aprobación antes de escribir."
+          },
+          "response": []
+        },
+        {
+          "name": "resources/list",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('es JSON-RPC 2.0', () => pm.expect(cuerpo.jsonrpc).to.eql('2.0'));",
+                  "pm.test('sin error de protocolo', () => pm.expect(cuerpo.error, JSON.stringify(cuerpo.error)).to.be.undefined);",
+                  "console.log(cuerpo.result.resources.map((r) => r.uri).join('\\n'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": {{rpcId}},\n  \"method\": \"resources/list\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "Contexto que el modelo puede leer sin gastar una llamada de herramienta."
+          },
+          "response": []
+        },
+        {
+          "name": "resources/read · restaurante",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('es JSON-RPC 2.0', () => pm.expect(cuerpo.jsonrpc).to.eql('2.0'));",
+                  "pm.test('sin error de protocolo', () => pm.expect(cuerpo.error, JSON.stringify(cuerpo.error)).to.be.undefined);",
+                  "pm.test('devuelve contenido', () => pm.expect(cuerpo.result.contents[0].text.length).to.be.above(10));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": {{rpcId}},\n  \"method\": \"resources/read\",\n  \"params\": {\n    \"uri\": \"guayacan://restaurante\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "Datos, horarios por día, salones, políticas de reserva y experiencias."
+          },
+          "response": []
+        },
+        {
+          "name": "resources/read · carta",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('es JSON-RPC 2.0', () => pm.expect(cuerpo.jsonrpc).to.eql('2.0'));",
+                  "pm.test('sin error de protocolo', () => pm.expect(cuerpo.error, JSON.stringify(cuerpo.error)).to.be.undefined);",
+                  "pm.test('devuelve contenido', () => pm.expect(cuerpo.result.contents[0].text.length).to.be.above(10));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": {{rpcId}},\n  \"method\": \"resources/read\",\n  \"params\": {\n    \"uri\": \"guayacan://carta\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "Secciones, platos, descripciones y precios en pesos."
+          },
+          "response": []
+        },
+        {
+          "name": "resources/read · agenda/hoy",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('es JSON-RPC 2.0', () => pm.expect(cuerpo.jsonrpc).to.eql('2.0'));",
+                  "pm.test('sin error de protocolo', () => pm.expect(cuerpo.error, JSON.stringify(cuerpo.error)).to.be.undefined);",
+                  "pm.test('devuelve contenido', () => pm.expect(cuerpo.result.contents[0].text.length).to.be.above(10));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": {{rpcId}},\n  \"method\": \"resources/read\",\n  \"params\": {\n    \"uri\": \"guayacan://agenda/hoy\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "Reservas e indicadores del día en curso (requiere PIN de sala)."
+          },
+          "response": []
+        },
+        {
+          "name": "prompts/list",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('es JSON-RPC 2.0', () => pm.expect(cuerpo.jsonrpc).to.eql('2.0'));",
+                  "pm.test('sin error de protocolo', () => pm.expect(cuerpo.error, JSON.stringify(cuerpo.error)).to.be.undefined);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": {{rpcId}},\n  \"method\": \"prompts/list\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "Los guiones que el servidor le ofrece al cliente."
+          },
+          "response": []
+        },
+        {
+          "name": "prompts/get · brief_de_turno",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('es JSON-RPC 2.0', () => pm.expect(cuerpo.jsonrpc).to.eql('2.0'));",
+                  "pm.test('sin error de protocolo', () => pm.expect(cuerpo.error, JSON.stringify(cuerpo.error)).to.be.undefined);",
+                  "console.log(cuerpo.result.messages[0].content.text);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": {{rpcId}},\n  \"method\": \"prompts/get\",\n  \"params\": {\n    \"name\": \"brief_de_turno\",\n    \"arguments\": {\n      \"fecha\": \"{{fecha}}\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "Resumen operativo del día para leer en la reunión previa al servicio."
+          },
+          "response": []
+        },
+        {
+          "name": "prompts/get · reservar_para_huesped",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('es JSON-RPC 2.0', () => pm.expect(cuerpo.jsonrpc).to.eql('2.0'));",
+                  "pm.test('sin error de protocolo', () => pm.expect(cuerpo.error, JSON.stringify(cuerpo.error)).to.be.undefined);",
+                  "console.log(cuerpo.result.messages[0].content.text);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": {{rpcId}},\n  \"method\": \"prompts/get\",\n  \"params\": {\n    \"name\": \"reservar_para_huesped\",\n    \"arguments\": {\n      \"personas\": \"4\",\n      \"fecha\": \"{{fecha}}\",\n      \"ocasion\": \"aniversario\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "Guion para tomar una reserva completa sin pedir datos de más."
+          },
+          "response": []
+        },
+        {
+          "name": "prompts/get · rescatar_reserva",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('es JSON-RPC 2.0', () => pm.expect(cuerpo.jsonrpc).to.eql('2.0'));",
+                  "pm.test('sin error de protocolo', () => pm.expect(cuerpo.error, JSON.stringify(cuerpo.error)).to.be.undefined);",
+                  "console.log(cuerpo.result.messages[0].content.text);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": {{rpcId}},\n  \"method\": \"prompts/get\",\n  \"params\": {\n    \"name\": \"rescatar_reserva\",\n    \"arguments\": {\n      \"codigo\": \"{{codigo}}\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "Cuando el huésped quiere cambiar o cancelar, busca la mejor alternativa antes de soltar la mesa."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "1 · Consultar · solo lectura",
+      "description": "Nada de esto toca la agenda. Corra `proximas_fechas_libres` primero: fija `fecha` y `hora`.",
+      "item": [
+        {
+          "name": "proximas_fechas_libres",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('es JSON-RPC 2.0', () => pm.expect(cuerpo.jsonrpc).to.eql('2.0'));",
+                  "pm.test('sin error de protocolo', () => pm.expect(cuerpo.error, JSON.stringify(cuerpo.error)).to.be.undefined);",
+                  "pm.test('la herramienta no falló', () => pm.expect(cuerpo.result.isError, cuerpo.result.content && cuerpo.result.content[0] && cuerpo.result.content[0].text).to.not.eql(true));",
+                  "pm.test('trae texto y datos', () => {",
+                  "  pm.expect(cuerpo.result.content[0].type).to.eql(\"text\");",
+                  "  pm.expect(cuerpo.result.structuredContent).to.be.an(\"object\");",
+                  "});",
+                  "console.log(cuerpo.result.content.map((c) => c.text).join('\\n'));",
+                  "const dias = cuerpo.result.structuredContent.resultado.calendar.filter((d) => d.open && d.slots > 2);",
+                  "pm.test('hay al menos un día con mesa', () => pm.expect(dias.length).to.be.above(0));",
+                  "if (dias.length) {",
+                  "  pm.collectionVariables.set('fecha', dias[0].date);",
+                  "  pm.collectionVariables.set('hora', dias[0].first);",
+                  "  console.log('fecha =', dias[0].date, '· hora =', dias[0].first);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": {{rpcId}},\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"proximas_fechas_libres\",\n    \"arguments\": {\n      \"personas\": 4,\n      \"dias\": 10\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "Recorre el calendario y devuelve qué días tienen mesa para un grupo, con su nivel de ocupación. Sirve para responder \"¿cuándo hay para 6 personas?\".\n\nSolo lectura.\n\nCórrala primero: su test guarda en las variables `fecha` y `hora` el primer día y la primera hora con mesa, y el resto de la colección los usa."
+          },
+          "response": []
+        },
+        {
+          "name": "consultar_disponibilidad",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('es JSON-RPC 2.0', () => pm.expect(cuerpo.jsonrpc).to.eql('2.0'));",
+                  "pm.test('sin error de protocolo', () => pm.expect(cuerpo.error, JSON.stringify(cuerpo.error)).to.be.undefined);",
+                  "pm.test('la herramienta no falló', () => pm.expect(cuerpo.result.isError, cuerpo.result.content && cuerpo.result.content[0] && cuerpo.result.content[0].text).to.not.eql(true));",
+                  "pm.test('trae texto y datos', () => {",
+                  "  pm.expect(cuerpo.result.content[0].type).to.eql(\"text\");",
+                  "  pm.expect(cuerpo.result.structuredContent).to.be.an(\"object\");",
+                  "});",
+                  "console.log(cuerpo.result.content.map((c) => c.text).join('\\n'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": {{rpcId}},\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"consultar_disponibilidad\",\n    \"arguments\": {\n      \"personas\": 4,\n      \"fecha\": \"{{fecha}}\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "Horarios con mesa libre para un día y un tamaño de grupo. Devuelve cada servicio (almuerzo, cena) con sus horas y en qué salones queda mesa. Úsela antes de crear una reserva.\n\nSolo lectura.\n\nLos horarios que devuelve son los únicos que se le pueden ofrecer a un huésped."
+          },
+          "response": []
+        },
+        {
+          "name": "estado_sala",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('es JSON-RPC 2.0', () => pm.expect(cuerpo.jsonrpc).to.eql('2.0'));",
+                  "pm.test('sin error de protocolo', () => pm.expect(cuerpo.error, JSON.stringify(cuerpo.error)).to.be.undefined);",
+                  "pm.test('la herramienta no falló', () => pm.expect(cuerpo.result.isError, cuerpo.result.content && cuerpo.result.content[0] && cuerpo.result.content[0].text).to.not.eql(true));",
+                  "pm.test('trae texto y datos', () => {",
+                  "  pm.expect(cuerpo.result.content[0].type).to.eql(\"text\");",
+                  "  pm.expect(cuerpo.result.structuredContent).to.be.an(\"object\");",
+                  "});",
+                  "console.log(cuerpo.result.content.map((c) => c.text).join('\\n'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": {{rpcId}},\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"estado_sala\",\n    \"arguments\": {\n      \"fecha\": \"{{fecha}}\",\n      \"hora\": \"{{hora}}\",\n      \"personas\": 4\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "Estado mesa por mesa (libre, ocupada, bloqueada) en los cinco salones a una fecha y hora concretas. Incluye quién ocupa cada mesa cuando la información existe.\n\nSolo lectura.\n\nEl plano mesa por mesa. Ojo: evalúa el turno completo desde esa hora."
+          },
+          "response": []
+        },
+        {
+          "name": "ver_carta",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('es JSON-RPC 2.0', () => pm.expect(cuerpo.jsonrpc).to.eql('2.0'));",
+                  "pm.test('sin error de protocolo', () => pm.expect(cuerpo.error, JSON.stringify(cuerpo.error)).to.be.undefined);",
+                  "pm.test('la herramienta no falló', () => pm.expect(cuerpo.result.isError, cuerpo.result.content && cuerpo.result.content[0] && cuerpo.result.content[0].text).to.not.eql(true));",
+                  "pm.test('trae texto y datos', () => {",
+                  "  pm.expect(cuerpo.result.content[0].type).to.eql(\"text\");",
+                  "  pm.expect(cuerpo.result.structuredContent).to.be.an(\"object\");",
+                  "});",
+                  "console.log(cuerpo.result.content.map((c) => c.text).join('\\n'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": {{rpcId}},\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"ver_carta\",\n    \"arguments\": {\n      \"seccion\": \"fogon\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "La carta con precios. Sirve para recomendar platos, resolver dudas de alérgenos o armar una sugerencia de menú antes de reservar.\n\nSolo lectura.\n\nQuite `seccion` para traer la carta completa, o agregue `solo_vegetariano: true`."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2 · Reservar · escribe en la agenda",
+      "description": "En orden: crear (guarda `codigo`), buscar, modificar y por último cancelar. `anotar_lista_espera` es la salida para grupos de más de 12.",
+      "item": [
+        {
+          "name": "crear_reserva",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('es JSON-RPC 2.0', () => pm.expect(cuerpo.jsonrpc).to.eql('2.0'));",
+                  "pm.test('sin error de protocolo', () => pm.expect(cuerpo.error, JSON.stringify(cuerpo.error)).to.be.undefined);",
+                  "pm.test('la herramienta no falló', () => pm.expect(cuerpo.result.isError, cuerpo.result.content && cuerpo.result.content[0] && cuerpo.result.content[0].text).to.not.eql(true));",
+                  "pm.test('trae texto y datos', () => {",
+                  "  pm.expect(cuerpo.result.content[0].type).to.eql(\"text\");",
+                  "  pm.expect(cuerpo.result.structuredContent).to.be.an(\"object\");",
+                  "});",
+                  "console.log(cuerpo.result.content.map((c) => c.text).join('\\n'));",
+                  "const r = cuerpo.result.structuredContent.resultado.reservation;",
+                  "pm.test('devuelve código y mesa', () => {",
+                  "  pm.expect(r.code).to.match(/^GY-[A-Z0-9]{4}$/);",
+                  "  pm.expect(r.tableId).to.be.a(\"string\");",
+                  "});",
+                  "pm.collectionVariables.set('codigo', r.code);",
+                  "console.log('reserva', r.code, '· mesa', r.tableId, '·', r.prettyDate, r.prettyTime);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": {{rpcId}},\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"crear_reserva\",\n    \"arguments\": {\n      \"nombre\": \"Mariana Arboleda\",\n      \"telefono\": \"+57 311 448 2076\",\n      \"correo\": \"mariana.arboleda@correo.com\",\n      \"personas\": 4,\n      \"fecha\": \"{{fecha}}\",\n      \"hora\": \"{{hora}}\",\n      \"salon\": \"terraza\",\n      \"ocasion\": \"aniversario\",\n      \"preferencias\": [\n        \"tranquila\",\n        \"ventana\"\n      ],\n      \"experiencias\": [\n        \"maridaje-aguardiente\"\n      ],\n      \"notas\": \"Diez años de casados. Si se puede, mesa apartada del paso.\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "Reserva una mesa y devuelve el código de confirmación. Confirme siempre fecha, hora y número de personas con el huésped antes de llamar esta herramienta: escribe en la agenda real.\n\nEscribe en la agenda.\n\nESCRIBE en la agenda de verdad. Su test guarda el código en la variable `codigo`, que usan las peticiones de buscar, modificar y cancelar."
+          },
+          "response": []
+        },
+        {
+          "name": "buscar_reserva",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('es JSON-RPC 2.0', () => pm.expect(cuerpo.jsonrpc).to.eql('2.0'));",
+                  "pm.test('sin error de protocolo', () => pm.expect(cuerpo.error, JSON.stringify(cuerpo.error)).to.be.undefined);",
+                  "pm.test('la herramienta no falló', () => pm.expect(cuerpo.result.isError, cuerpo.result.content && cuerpo.result.content[0] && cuerpo.result.content[0].text).to.not.eql(true));",
+                  "pm.test('trae texto y datos', () => {",
+                  "  pm.expect(cuerpo.result.content[0].type).to.eql(\"text\");",
+                  "  pm.expect(cuerpo.result.structuredContent).to.be.an(\"object\");",
+                  "});",
+                  "console.log(cuerpo.result.content.map((c) => c.text).join('\\n'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": {{rpcId}},\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"buscar_reserva\",\n    \"arguments\": {\n      \"codigo\": \"{{codigo}}\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "Encuentra una reserva por su código, o todas las reservas activas de un teléfono.\n\nSolo lectura.\n\nTambién acepta `telefono` en vez de `codigo`."
+          },
+          "response": []
+        },
+        {
+          "name": "modificar_reserva",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('es JSON-RPC 2.0', () => pm.expect(cuerpo.jsonrpc).to.eql('2.0'));",
+                  "pm.test('sin error de protocolo', () => pm.expect(cuerpo.error, JSON.stringify(cuerpo.error)).to.be.undefined);",
+                  "pm.test('la herramienta no falló', () => pm.expect(cuerpo.result.isError, cuerpo.result.content && cuerpo.result.content[0] && cuerpo.result.content[0].text).to.not.eql(true));",
+                  "pm.test('trae texto y datos', () => {",
+                  "  pm.expect(cuerpo.result.content[0].type).to.eql(\"text\");",
+                  "  pm.expect(cuerpo.result.structuredContent).to.be.an(\"object\");",
+                  "});",
+                  "console.log(cuerpo.result.content.map((c) => c.text).join('\\n'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": {{rpcId}},\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"modificar_reserva\",\n    \"arguments\": {\n      \"codigo\": \"{{codigo}}\",\n      \"personas\": 3\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "Mueve una reserva existente. Reasigna la mesa automáticamente y falla si no hay cupo, devolviendo las horas que sí tienen mesa.\n\nEscribe en la agenda.\n\nReasigna la mesa sola. Pruebe a subir el grupo a 8: si no cabe, el error trae las horas que sí tienen mesa, que es justo lo que el modelo necesita para seguir hablando."
+          },
+          "response": []
+        },
+        {
+          "name": "anotar_lista_espera",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('es JSON-RPC 2.0', () => pm.expect(cuerpo.jsonrpc).to.eql('2.0'));",
+                  "pm.test('sin error de protocolo', () => pm.expect(cuerpo.error, JSON.stringify(cuerpo.error)).to.be.undefined);",
+                  "pm.test('la herramienta no falló', () => pm.expect(cuerpo.result.isError, cuerpo.result.content && cuerpo.result.content[0] && cuerpo.result.content[0].text).to.not.eql(true));",
+                  "pm.test('trae texto y datos', () => {",
+                  "  pm.expect(cuerpo.result.content[0].type).to.eql(\"text\");",
+                  "  pm.expect(cuerpo.result.structuredContent).to.be.an(\"object\");",
+                  "});",
+                  "console.log(cuerpo.result.content.map((c) => c.text).join('\\n'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": {{rpcId}},\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"anotar_lista_espera\",\n    \"arguments\": {\n      \"nombre\": \"Grupo Cifuentes\",\n      \"telefono\": \"+57 300 000 0000\",\n      \"correo\": \"grupo@correo.com\",\n      \"personas\": 20,\n      \"fecha\": \"{{fecha}}\",\n      \"franja\": \"cena\",\n      \"notas\": \"Cierre de trimestre, quieren salón privado.\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "Cuando un día está lleno o el grupo pasa de 12, deja los datos para que la casa llame. No reserva mesa.\n\nEscribe en la agenda.\n\nLa salida para grupos de más de 12 y para días llenos. No reserva mesa."
+          },
+          "response": []
+        },
+        {
+          "name": "cancelar_reserva",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('es JSON-RPC 2.0', () => pm.expect(cuerpo.jsonrpc).to.eql('2.0'));",
+                  "pm.test('sin error de protocolo', () => pm.expect(cuerpo.error, JSON.stringify(cuerpo.error)).to.be.undefined);",
+                  "pm.test('la herramienta no falló', () => pm.expect(cuerpo.result.isError, cuerpo.result.content && cuerpo.result.content[0] && cuerpo.result.content[0].text).to.not.eql(true));",
+                  "pm.test('trae texto y datos', () => {",
+                  "  pm.expect(cuerpo.result.content[0].type).to.eql(\"text\");",
+                  "  pm.expect(cuerpo.result.structuredContent).to.be.an(\"object\");",
+                  "});",
+                  "console.log(cuerpo.result.content.map((c) => c.text).join('\\n'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": {{rpcId}},\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"cancelar_reserva\",\n    \"arguments\": {\n      \"codigo\": \"{{codigo}}\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "Cancela la reserva y libera la mesa. Es irreversible desde el lado del huésped: confirme con la persona antes de llamarla.\n\nEscribe en la agenda. Destructiva.\n\nDestructiva: libera la mesa. Déjela de última en la carpeta."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3 · Sala · requiere PIN",
+      "description": "Herramientas del equipo. El PIN no viaja en la petición: lo lleva el servidor MCP en GUAYACAN_PIN. Vuelva a crear una reserva antes de `marcar_estado` si ya canceló la anterior.",
+      "item": [
+        {
+          "name": "agenda_del_dia",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('es JSON-RPC 2.0', () => pm.expect(cuerpo.jsonrpc).to.eql('2.0'));",
+                  "pm.test('sin error de protocolo', () => pm.expect(cuerpo.error, JSON.stringify(cuerpo.error)).to.be.undefined);",
+                  "pm.test('la herramienta no falló', () => pm.expect(cuerpo.result.isError, cuerpo.result.content && cuerpo.result.content[0] && cuerpo.result.content[0].text).to.not.eql(true));",
+                  "pm.test('trae texto y datos', () => {",
+                  "  pm.expect(cuerpo.result.content[0].type).to.eql(\"text\");",
+                  "  pm.expect(cuerpo.result.structuredContent).to.be.an(\"object\");",
+                  "});",
+                  "console.log(cuerpo.result.content.map((c) => c.text).join('\\n'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": {{rpcId}},\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"agenda_del_dia\",\n    \"arguments\": {\n      \"fecha\": \"{{fecha}}\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "Vista de servicio: indicadores, reservas hora por hora, notas de preparación y bloqueos. Es la herramienta para el brief del turno. (requiere PIN de sala)\n\nSolo lectura.\n\nNecesita GUAYACAN_PIN en el servidor del MCP. Es la vista del equipo de sala."
+          },
+          "response": []
+        },
+        {
+          "name": "marcar_estado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('es JSON-RPC 2.0', () => pm.expect(cuerpo.jsonrpc).to.eql('2.0'));",
+                  "pm.test('sin error de protocolo', () => pm.expect(cuerpo.error, JSON.stringify(cuerpo.error)).to.be.undefined);",
+                  "pm.test('la herramienta no falló', () => pm.expect(cuerpo.result.isError, cuerpo.result.content && cuerpo.result.content[0] && cuerpo.result.content[0].text).to.not.eql(true));",
+                  "pm.test('trae texto y datos', () => {",
+                  "  pm.expect(cuerpo.result.content[0].type).to.eql(\"text\");",
+                  "  pm.expect(cuerpo.result.structuredContent).to.be.an(\"object\");",
+                  "});",
+                  "console.log(cuerpo.result.content.map((c) => c.text).join('\\n'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": {{rpcId}},\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"marcar_estado\",\n    \"arguments\": {\n      \"codigo\": \"{{codigo}}\",\n      \"estado\": \"sentada\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "Cambia el estado de una reserva durante el servicio: confirmada, sentada, completada, no-show o cancelada. (requiere PIN de sala)\n\nEscribe en la agenda.\n\nEstados: pendiente, confirmada, sentada, completada, no-show, cancelada."
+          },
+          "response": []
+        },
+        {
+          "name": "bloquear_franja",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('es JSON-RPC 2.0', () => pm.expect(cuerpo.jsonrpc).to.eql('2.0'));",
+                  "pm.test('sin error de protocolo', () => pm.expect(cuerpo.error, JSON.stringify(cuerpo.error)).to.be.undefined);",
+                  "pm.test('la herramienta no falló', () => pm.expect(cuerpo.result.isError, cuerpo.result.content && cuerpo.result.content[0] && cuerpo.result.content[0].text).to.not.eql(true));",
+                  "pm.test('trae texto y datos', () => {",
+                  "  pm.expect(cuerpo.result.content[0].type).to.eql(\"text\");",
+                  "  pm.expect(cuerpo.result.structuredContent).to.be.an(\"object\");",
+                  "});",
+                  "console.log(cuerpo.result.content.map((c) => c.text).join('\\n'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": {{rpcId}},\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"bloquear_franja\",\n    \"arguments\": {\n      \"fecha\": \"{{fecha}}\",\n      \"desde\": \"20:00\",\n      \"hasta\": \"21:30\",\n      \"alcance\": \"terraza\",\n      \"motivo\": \"Brasero en reparación\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "Cierra mesas, un salón o todo el restaurante en un rango de horas (lluvia, evento privado, mantenimiento). Avisa qué reservas quedan dentro del bloqueo. (requiere PIN de sala)\n\nEscribe en la agenda. Destructiva.\n\nAvisa qué reservas quedan dentro del bloqueo. `alcance` acepta all, un salón o una mesa."
+          },
+          "response": []
+        },
+        {
+          "name": "metricas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('es JSON-RPC 2.0', () => pm.expect(cuerpo.jsonrpc).to.eql('2.0'));",
+                  "pm.test('sin error de protocolo', () => pm.expect(cuerpo.error, JSON.stringify(cuerpo.error)).to.be.undefined);",
+                  "pm.test('la herramienta no falló', () => pm.expect(cuerpo.result.isError, cuerpo.result.content && cuerpo.result.content[0] && cuerpo.result.content[0].text).to.not.eql(true));",
+                  "pm.test('trae texto y datos', () => {",
+                  "  pm.expect(cuerpo.result.content[0].type).to.eql(\"text\");",
+                  "  pm.expect(cuerpo.result.structuredContent).to.be.an(\"object\");",
+                  "});",
+                  "console.log(cuerpo.result.content.map((c) => c.text).join('\\n'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": {{rpcId}},\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"metricas\",\n    \"arguments\": {\n      \"dias\": 14\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "Cubiertos por día, distribución por salón, curva de llegada, cancelaciones y no-shows de los últimos días. Para decidir personal y compras. (requiere PIN de sala)\n\nSolo lectura.\n\nCubiertos por día, ocupación, cancelaciones y no-shows."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4 · Errores · lo que ve el modelo cuando algo no cabe",
+      "description": "Un error de negocio vuelve como `isError: true` con la salida incluida; un error de protocolo vuelve como `error` de JSON-RPC. Son cosas distintas y aquí se ven las dos.",
+      "item": [
+        {
+          "name": "Grupo de 20 · no cabe en línea",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('es JSON-RPC 2.0', () => pm.expect(cuerpo.jsonrpc).to.eql('2.0'));",
+                  "pm.test('sin error de protocolo', () => pm.expect(cuerpo.error, JSON.stringify(cuerpo.error)).to.be.undefined);",
+                  "pm.test('marca isError', () => pm.expect(cuerpo.result.isError).to.eql(true));",
+                  "console.log(cuerpo.result.content[0].text);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": {{rpcId}},\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"crear_reserva\",\n    \"arguments\": {\n      \"nombre\": \"Grupo Cifuentes\",\n      \"telefono\": \"+57 300 000 0000\",\n      \"correo\": \"grupo@correo.com\",\n      \"personas\": 20,\n      \"fecha\": \"{{fecha}}\",\n      \"hora\": \"{{hora}}\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "El máximo en línea son 12 personas. El texto de vuelta le dice al modelo qué hacer."
+          },
+          "response": []
+        },
+        {
+          "name": "Lunes · la casa descansa",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('es JSON-RPC 2.0', () => pm.expect(cuerpo.jsonrpc).to.eql('2.0'));",
+                  "pm.test('sin error de protocolo', () => pm.expect(cuerpo.error, JSON.stringify(cuerpo.error)).to.be.undefined);",
+                  "console.log(cuerpo.result.content[0].text);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": {{rpcId}},\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"consultar_disponibilidad\",\n    \"arguments\": {\n      \"personas\": 2,\n      \"fecha\": \"{{lunes}}\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "No es un fallo: devuelve el motivo y fechas cercanas con cupo."
+          },
+          "response": []
+        },
+        {
+          "name": "Herramienta inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('error -32602', () => pm.expect(cuerpo.error.code).to.eql(-32602));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": {{rpcId}},\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"traer_aguardiente\",\n    \"arguments\": {}\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "Error de parámetros (-32602): el nombre no está en el catálogo."
+          },
+          "response": []
+        },
+        {
+          "name": "Método no implementado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('error -32601', () => pm.expect(cuerpo.error.code).to.eql(-32601));",
+                  "console.log('métodos disponibles:', cuerpo.error.data.disponibles.join(', '));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": {{rpcId}},\n  \"method\": \"sampling/createMessage\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "Error -32601. La respuesta lista los métodos que sí existen."
+          },
+          "response": []
+        },
+        {
+          "name": "JSON roto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 400', () => pm.response.to.have.status(400));",
+                  "pm.test('error de parseo -32700', () => pm.expect(pm.response.json().error.code).to.eql(-32700));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"jsonrpc\": \"2.0\", \"id\": 1, ",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "Cuerpo mal formado: el servidor responde con el error de parseo del protocolo."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5 · API REST del restaurante",
+      "description": "Lo que el MCP llama por debajo. Sirve para depurar: si una herramienta devuelve algo raro, aquí se ve el JSON crudo. El PIN de sala va en la cabecera `x-admin-pin`.",
+      "item": [
+        {
+          "name": "GET /api/config",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('hoy', pm.response.json().today);",
+                  "pm.test('trae mesas', () => pm.expect(pm.response.json().tables.length).to.be.above(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/config",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "config"
+              ]
+            },
+            "description": "Restaurante, salones, mesas, carta, ocasiones, preferencias y experiencias."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/calendar",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/calendar?from={{hoy}}&days=14&party=4",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "calendar"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "{{hoy}}"
+                },
+                {
+                  "key": "days",
+                  "value": "14"
+                },
+                {
+                  "key": "party",
+                  "value": "4"
+                }
+              ]
+            },
+            "description": "Presión de la agenda día por día."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/availability",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/availability?date={{fecha}}&party=4",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "availability"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "{{fecha}}"
+                },
+                {
+                  "key": "party",
+                  "value": "4"
+                }
+              ]
+            },
+            "description": "Servicios, malla de horarios cada 15 minutos y estado de cada uno."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/floor",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/floor?date={{fecha}}&time={{hora}}&party=4",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "floor"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "{{fecha}}"
+                },
+                {
+                  "key": "time",
+                  "value": "{{hora}}"
+                },
+                {
+                  "key": "party",
+                  "value": "4"
+                }
+              ]
+            },
+            "description": "Estado de las 28 mesas, con sus coordenadas para dibujar el plano."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/reservations",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 creada', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('codigoRest', pm.response.json().reservation.code);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Andrés Mejía\",\n  \"phone\": \"+57 320 551 0099\",\n  \"email\": \"andres.mejia@correo.com\",\n  \"party\": 2,\n  \"date\": \"{{fecha}}\",\n  \"time\": \"{{hora}}\",\n  \"zone\": \"patio\",\n  \"occasion\": \"romantica\",\n  \"preferences\": [\n    \"tranquila\"\n  ],\n  \"experiences\": [],\n  \"notes\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reservations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reservations"
+              ]
+            },
+            "description": "Crear reserva por la API directa. Guarda el código en `codigoRest`."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/reservations/lookup",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reservations/lookup?code={{codigoRest}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reservations",
+                "lookup"
+              ],
+              "query": [
+                {
+                  "key": "code",
+                  "value": "{{codigoRest}}"
+                }
+              ]
+            },
+            "description": "Buscar por código. También acepta `phone`."
+          },
+          "response": []
+        },
+        {
+          "name": "PATCH /api/reservations/:code · cancelar",
+          "event": [],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"cancelar\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reservations/{{codigoRest}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reservations",
+                "{{codigoRest}}"
+              ]
+            },
+            "description": "Cancela y libera la mesa."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/reservations/:code/ics",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reservations/{{codigoRest}}/ics",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reservations",
+                "{{codigoRest}}",
+                "ics"
+              ]
+            },
+            "description": "Archivo de calendario. En Postman se ve como texto plano."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/admin/day · PIN",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-admin-pin",
+                "value": "{{pin}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/day?date={{fecha}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "day"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "{{fecha}}"
+                }
+              ]
+            },
+            "description": "Agenda del día con KPIs, timeline por mesa y lista de espera."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/admin/stats · PIN",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-admin-pin",
+                "value": "{{pin}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/stats?days=14",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "stats"
+              ],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "14"
+                }
+              ]
+            },
+            "description": "Serie de cubiertos, reparto por salón, curva de llegada."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/admin/export.csv",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/export.csv?from={{hoy}}&to={{fecha}}&pin={{pin}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "export.csv"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "{{hoy}}"
+                },
+                {
+                  "key": "to",
+                  "value": "{{fecha}}"
+                },
+                {
+                  "key": "pin",
+                  "value": "{{pin}}"
+                }
+              ]
+            },
+            "description": "Exportación. Aquí el PIN va en la query porque la descarga sale por un enlace del navegador."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /mcp · ficha del endpoint",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            },
+            "description": "Un GET a /mcp no abre un stream: devuelve qué métodos, herramientas y recursos hay."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>El Guayacán · Reservas · Cocina colombiana de autor</title>
+    <meta
+      name="description"
+      content="Reserve su mesa en El Guayacán, cocina colombiana de autor en Chapinero Alto, Bogotá. Elija salón, mesa y experiencia en menos de un minuto."
+    />
+    <meta name="theme-color" content="#0d0b08" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%230d0b08'/%3E%3Cpath d='M16 6c2 3.2 5.2 4.4 8.6 4.2-1.4 3.1-1 6.4.8 9.3-3.4-.6-6.5.6-8.8 3.1-2.2-2.5-5.4-3.7-8.8-3.1 1.8-2.9 2.2-6.2.8-9.3C11.9 10.4 14 9.2 16 6Z' fill='%23e0a63f'/%3E%3Ccircle cx='16' cy='16' r='2.6' fill='%23c1552d'/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..600&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/css/tokens.css" />
+    <link rel="stylesheet" href="/assets/css/site.css" />
+    <link rel="stylesheet" href="/assets/css/chat.css" />
+  </head>
+
+  <body>
+    <div class="grain" aria-hidden="true"></div>
+    <a class="skip" href="#reservar">Ir directo a reservar</a>
+
+    <!-- ═══════════════════════════════════════════════════ barra superior -->
+    <header class="topbar" id="topbar">
+      <div class="topbar-inner shell">
+        <a class="brand" href="#inicio" aria-label="El Guayacán, inicio">
+          <svg class="brand-mark" viewBox="0 0 40 40" aria-hidden="true">
+            <path
+              d="M20 4c2.6 4.2 6.7 5.8 11.2 5.5-1.9 4.1-1.4 8.4 1 12.2-4.4-.8-8.4.8-11.4 4-2.9-3.2-7-4.8-11.4-4 2.4-3.8 2.9-8.1 1-12.2C14.9 9.8 17.4 8.2 20 4Z"
+              fill="url(#brandGold)"
+            />
+            <circle cx="20" cy="19" r="3.2" fill="#c1552d" />
+            <path d="M20 25v11" stroke="#46a179" stroke-width="1.8" stroke-linecap="round" />
+            <path d="M20 30c-2.6-.4-4.4-1.9-5.2-4.4 2.6-.3 4.4.9 5.2 4.4Z" fill="#2f7d5b" />
+            <defs>
+              <linearGradient id="brandGold" x1="8" y1="4" x2="32" y2="26">
+                <stop stop-color="#f6dda1" />
+                <stop offset=".45" stop-color="#e0a63f" />
+                <stop offset="1" stop-color="#c1552d" />
+              </linearGradient>
+            </defs>
+          </svg>
+          <span class="brand-text">
+            <strong>El Guayacán</strong>
+            <small>Cocina colombiana de autor</small>
+          </span>
+        </a>
+
+        <nav class="topnav" id="topnav" aria-label="Secciones">
+          <a href="#reservar">Reservar</a>
+          <a href="#salones">Salones</a>
+          <a href="#carta">La carta</a>
+          <a href="#casa">La casa</a>
+        </nav>
+
+        <div class="topbar-actions">
+          <button class="btn btn-ghost" type="button" data-action="open-lookup">Mi reserva</button>
+          <a class="btn btn-gold" href="#reservar">Reservar mesa</a>
+        </div>
+
+        <button class="burger" type="button" aria-expanded="false" aria-controls="topnav" aria-label="Abrir menú">
+          <span></span><span></span>
+        </button>
+      </div>
+    </header>
+
+    <main>
+      <!-- ═══════════════════════════════════════════════════════════ portada -->
+      <section class="hero" id="inicio">
+        <div class="hero-bg" aria-hidden="true">
+          <div class="hero-glow"></div>
+          <svg class="hero-branch" viewBox="0 0 600 400" preserveAspectRatio="xMaxYMin slice" aria-hidden="true">
+            <g stroke="#3a2e22" stroke-width="3" fill="none" stroke-linecap="round">
+              <path d="M600 40C520 60 470 96 430 150c-32 44-70 72-124 84" />
+              <path d="M470 122c-38-14-72-10-104 12" />
+              <path d="M520 76c-20 34-24 66-12 98" />
+              <path d="M398 210c-26 22-56 32-92 30" />
+            </g>
+            <g fill="#e0a63f" opacity=".85">
+              <circle cx="306" cy="240" r="9" /><circle cx="366" cy="134" r="7" />
+              <circle cx="430" cy="150" r="11" /><circle cx="470" cy="122" r="8" />
+              <circle cx="508" cy="174" r="10" /><circle cx="546" cy="70" r="8" />
+              <circle cx="580" cy="118" r="6" /><circle cx="398" cy="210" r="8" />
+              <circle cx="336" cy="266" r="6" /><circle cx="452" cy="216" r="7" />
+            </g>
+            <g fill="#f2c75c" opacity=".5">
+              <circle cx="288" cy="212" r="4" /><circle cx="418" cy="112" r="4" />
+              <circle cx="492" cy="130" r="5" /><circle cx="556" cy="140" r="4" />
+            </g>
+          </svg>
+          <div class="petals" id="petals"></div>
+        </div>
+
+        <div class="hero-inner shell">
+          <div class="hero-copy">
+            <p class="eyebrow">Chapinero Alto · Bogotá · desde 2014</p>
+            <h1>
+              Seis regiones,<br />
+              un solo fogón<em>.</em>
+            </h1>
+            <p class="lede">
+              Cocinamos con leña, producto de finca y recetas que alguien nos enseñó en una cocina de verdad.
+              Elija el salón, la mesa y la hora: el resto lo ponemos nosotros.
+            </p>
+
+            <form class="quickbar card" id="quickbar" novalidate>
+              <div class="quickbar-field">
+                <label for="qPeople">Personas</label>
+                <select class="select" id="qPeople" name="party"></select>
+              </div>
+              <div class="quickbar-field">
+                <label for="qDate">Fecha</label>
+                <input class="input" type="date" id="qDate" name="date" />
+              </div>
+              <div class="quickbar-field quickbar-field-wide">
+                <label for="qService">Servicio</label>
+                <select class="select" id="qService" name="service">
+                  <option value="cualquiera">A cualquier hora</option>
+                  <option value="almuerzo">Almuerzo</option>
+                  <option value="cena">Cena</option>
+                </select>
+              </div>
+              <button class="btn btn-gold btn-lg" type="submit">Ver horarios</button>
+            </form>
+
+            <ul class="hero-facts">
+              <li><strong id="factTables">—</strong><span>mesas en cinco salones</span></li>
+              <li><strong id="factTonight">—</strong><span>horarios libres próximos</span></li>
+              <li><strong>2 h</strong><span>de mesa para su grupo</span></li>
+            </ul>
+          </div>
+
+          <aside class="hero-panel card" id="tonightPanel" aria-live="polite">
+            <div class="hero-panel-head">
+              <span class="eyebrow">Estado de la sala</span>
+              <span class="pulse" aria-hidden="true"></span>
+            </div>
+            <div id="tonightBody" class="hero-panel-body">
+              <div class="skeleton" style="height: 1.1rem; width: 60%"></div>
+              <div class="skeleton" style="height: 3.2rem"></div>
+              <div class="skeleton" style="height: 1.1rem; width: 80%"></div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════ reservar -->
+      <section class="booking" id="reservar">
+        <div class="shell">
+          <header class="section-head">
+            <div>
+              <p class="eyebrow">Reserva en línea</p>
+              <h2>Su mesa, en cuatro pasos</h2>
+            </div>
+            <p class="section-note">
+              Confirmación inmediata. Puede cambiarla o cancelarla hasta 4 horas antes sin costo.
+            </p>
+          </header>
+
+          <ol class="steps" id="steps" role="list">
+            <li data-step="1"><span class="steps-dot">1</span><span class="steps-label">Cuándo</span></li>
+            <li data-step="2"><span class="steps-dot">2</span><span class="steps-label">Dónde</span></li>
+            <li data-step="3"><span class="steps-dot">3</span><span class="steps-label">Detalles</span></li>
+            <li data-step="4"><span class="steps-dot">4</span><span class="steps-label">Confirmar</span></li>
+          </ol>
+
+          <div class="booking-grid">
+            <div class="booking-main">
+              <!-- Paso 1 ------------------------------------------------------ -->
+              <section class="panel is-active" data-panel="1" aria-labelledby="p1title">
+                <h3 id="p1title" class="panel-title">¿Cuántos vienen y cuándo?</h3>
+
+                <div class="block">
+                  <div class="block-head">
+                    <h4>Personas</h4>
+                    <button class="btn btn-sm btn-ghost" type="button" data-action="open-event">
+                      ¿Más de 12?
+                    </button>
+                  </div>
+                  <div class="chips" id="partyChips" role="group" aria-label="Número de personas"></div>
+                </div>
+
+                <div class="block">
+                  <div class="block-head">
+                    <h4>Fecha</h4>
+                    <div class="date-jump">
+                      <label class="sr" for="datePicker">Otra fecha</label>
+                      <input class="input input-sm" type="date" id="datePicker" />
+                    </div>
+                  </div>
+                  <div class="daystrip-wrap">
+                    <button class="daystrip-nav" type="button" data-scroll="-1" aria-label="Semana anterior">‹</button>
+                    <div class="daystrip" id="dayStrip" role="group" aria-label="Elegir día"></div>
+                    <button class="daystrip-nav" type="button" data-scroll="1" aria-label="Semana siguiente">›</button>
+                  </div>
+                  <p class="legend">
+                    <span><i class="dot dot-free"></i> disponible</span>
+                    <span><i class="dot dot-tight"></i> casi lleno</span>
+                    <span><i class="dot dot-off"></i> cerrado</span>
+                  </p>
+                </div>
+
+                <div class="block" id="slotsBlock">
+                  <div class="block-head">
+                    <h4>Hora de llegada</h4>
+                    <span class="block-note" id="turnNote"></span>
+                  </div>
+                  <div id="slotsHost" class="slots-host"></div>
+                </div>
+
+                <footer class="panel-foot">
+                  <span class="panel-hint" id="p1hint">Elija personas, día y hora para continuar.</span>
+                  <button class="btn btn-gold" type="button" data-next="2" disabled>Elegir salón</button>
+                </footer>
+              </section>
+
+              <!-- Paso 2 ------------------------------------------------------ -->
+              <section class="panel" data-panel="2" aria-labelledby="p2title" hidden>
+                <h3 id="p2title" class="panel-title">¿En qué salón los acomodamos?</h3>
+                <div class="zones" id="zoneCards"></div>
+
+                <div class="block floorplan-block" id="floorBlock" hidden>
+                  <div class="block-head">
+                    <h4>Escoja mesa <span class="muted">(opcional)</span></h4>
+                    <button class="btn btn-sm btn-ghost" type="button" data-action="clear-table">
+                      Nos da igual
+                    </button>
+                  </div>
+                  <div class="floorplan" id="floorPlan"></div>
+                  <p class="legend">
+                    <span><i class="dot dot-free"></i> libre</span>
+                    <span><i class="dot dot-busy"></i> ocupada</span>
+                    <span><i class="dot dot-off"></i> no aplica para su grupo</span>
+                  </p>
+                </div>
+
+                <footer class="panel-foot">
+                  <button class="btn" type="button" data-prev="1">Atrás</button>
+                  <button class="btn btn-gold" type="button" data-next="3" disabled>Continuar</button>
+                </footer>
+              </section>
+
+              <!-- Paso 3 ------------------------------------------------------ -->
+              <section class="panel" data-panel="3" aria-labelledby="p3title" hidden>
+                <h3 id="p3title" class="panel-title">Cuéntenos de la mesa</h3>
+
+                <form id="guestForm" novalidate>
+                  <div class="grid-2">
+                    <label class="field">
+                      <span>Nombre y apellido</span>
+                      <input class="input" name="name" id="gName" autocomplete="name" placeholder="Camila Restrepo" required />
+                      <em class="field-error" data-error-for="name" hidden></em>
+                    </label>
+                    <label class="field">
+                      <span>Celular</span>
+                      <input class="input" name="phone" id="gPhone" inputmode="tel" autocomplete="tel" placeholder="+57 310 000 0000" required />
+                      <em class="field-error" data-error-for="phone" hidden></em>
+                    </label>
+                  </div>
+                  <label class="field">
+                    <span>Correo (le llega la confirmación)</span>
+                    <input class="input" type="email" name="email" id="gEmail" autocomplete="email" placeholder="camila@correo.com" required />
+                    <em class="field-error" data-error-for="email" hidden></em>
+                  </label>
+
+                  <div class="block">
+                    <div class="block-head"><h4>¿Celebran algo?</h4></div>
+                    <div class="chips" id="occasionChips" role="group" aria-label="Ocasión"></div>
+                  </div>
+
+                  <div class="block">
+                    <div class="block-head">
+                      <h4>Preferencias</h4>
+                      <span class="block-note">Marque lo que aplique</span>
+                    </div>
+                    <div class="chips" id="prefChips" role="group" aria-label="Preferencias"></div>
+                  </div>
+
+                  <div class="block">
+                    <div class="block-head">
+                      <h4>Experiencias de la casa</h4>
+                      <span class="block-note">Se pagan en el restaurante</span>
+                    </div>
+                    <div class="experiences" id="expList"></div>
+                  </div>
+
+                  <label class="field">
+                    <span>Algo más que debamos saber</span>
+                    <textarea class="textarea" name="notes" id="gNotes" maxlength="600" placeholder="Alergias, silla de ruedas, llegamos de un vuelo, la mesa es sorpresa…"></textarea>
+                  </label>
+                </form>
+
+                <footer class="panel-foot">
+                  <button class="btn" type="button" data-prev="2">Atrás</button>
+                  <button class="btn btn-gold" type="button" data-next="4">Revisar reserva</button>
+                </footer>
+              </section>
+
+              <!-- Paso 4 ------------------------------------------------------ -->
+              <section class="panel" data-panel="4" aria-labelledby="p4title" hidden>
+                <h3 id="p4title" class="panel-title">Revise y confirme</h3>
+                <div id="reviewHost"></div>
+
+                <div class="policy">
+                  <h4>Lo que acordamos</h4>
+                  <ul>
+                    <li>Guardamos la mesa <strong>15 minutos</strong> después de la hora reservada.</li>
+                    <li>Cambios y cancelaciones sin costo hasta <strong>4 horas antes</strong>.</li>
+                    <li>Desde <strong>8 personas</strong> pedimos garantía; lo llamamos para coordinarla.</li>
+                    <li>La cocina cierra 30 minutos antes del cierre del salón.</li>
+                  </ul>
+                </div>
+
+                <footer class="panel-foot">
+                  <button class="btn" type="button" data-prev="3">Atrás</button>
+                  <button class="btn btn-gold btn-lg" type="button" id="submitBooking">Confirmar reserva</button>
+                </footer>
+              </section>
+
+              <!-- Éxito ------------------------------------------------------- -->
+              <section class="panel" data-panel="ok" aria-labelledby="pOkTitle" hidden>
+                <div id="successHost"></div>
+              </section>
+            </div>
+
+            <!-- Resumen lateral -->
+            <aside class="booking-rail">
+              <div class="rail card" id="rail">
+                <span class="eyebrow">Su reserva</span>
+                <div id="railBody"></div>
+              </div>
+              <div class="rail-help">
+                <p>¿Prefiere hablar con alguien?</p>
+                <a class="rail-phone" href="tel:+576017429080">+57 601 742 9080</a>
+                <a class="rail-wa" href="https://wa.me/573107429080" target="_blank" rel="noopener">
+                  Escribir por WhatsApp
+                </a>
+                <button class="btn btn-sm" type="button" data-action="open-chat" style="margin-top:0.7rem">
+                  Reservar hablando con Sofía
+                </button>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════ salones -->
+      <section class="salones" id="salones">
+        <div class="shell">
+          <header class="section-head">
+            <div>
+              <p class="eyebrow">La casa</p>
+              <h2>Cinco salones, cinco maneras de comer</h2>
+            </div>
+            <p class="section-note">
+              Una casa de 1948 que arreglamos sin borrarla. Cada salón tiene su propio ánimo.
+            </p>
+          </header>
+          <div class="salon-grid" id="salonGrid"></div>
+        </div>
+      </section>
+
+      <!-- ═════════════════════════════════════════════════════════════ carta -->
+      <section class="carta" id="carta">
+        <div class="shell">
+          <header class="section-head">
+            <div>
+              <p class="eyebrow">Para leer con hambre</p>
+              <h2>La carta</h2>
+            </div>
+            <p class="section-note">
+              Cambia con la cosecha. Precios en pesos colombianos, impuestos incluidos.
+            </p>
+          </header>
+          <div class="menu-tabs" id="menuTabs" role="tablist" aria-label="Secciones de la carta"></div>
+          <div id="menuHost" class="menu-host"></div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ casa -->
+      <section class="casa" id="casa">
+        <div class="shell casa-grid">
+          <div class="casa-copy">
+            <p class="eyebrow">Quiénes somos</p>
+            <h2>Un guayacán en la mitad del patio</h2>
+            <p>
+              En 2014 arrendamos una casa vieja en la 7ª con un guayacán amarillo en el patio. Nos quedamos por
+              el árbol. La carta la escribimos viajando: el mote de queso lo aprendimos en Sincelejo, el pipián
+              en el Cauca, la trucha en Guasca. Todo se cocina el mismo día en el que se sirve.
+            </p>
+            <p>
+              Trabajamos con 34 fincas y cooperativas de Boyacá, Nariño, el Huila y la Sierra Nevada. Cuando el
+              guayacán florece, en marzo y en septiembre, el patio se pone amarillo y no cobramos el postre.
+            </p>
+            <div class="casa-signature">
+              <span class="mono">Chef Marcela Ospina</span>
+              <span class="muted">y las 26 personas de la casa</span>
+            </div>
+          </div>
+
+          <div class="casa-hours card">
+            <h3>Horarios</h3>
+            <ul id="hoursList" class="hours"></ul>
+            <div class="casa-meta">
+              <p><strong>Cra. 7 #69-42</strong><br />Chapinero Alto, Bogotá</p>
+              <p>
+                <a href="tel:+576017429080">+57 601 742 9080</a><br />
+                <a href="mailto:reservas@elguayacan.co">reservas@elguayacan.co</a>
+              </p>
+              <p class="muted">Parqueadero con valet · accesible en silla de ruedas</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="shell footer-inner">
+        <div>
+          <strong>El Guayacán</strong>
+          <p class="muted">Cocina colombiana de autor · Bogotá</p>
+        </div>
+        <nav class="footer-nav">
+          <a href="#reservar">Reservar</a>
+          <a href="#carta">Carta</a>
+          <button type="button" data-action="open-lookup">Mi reserva</button>
+          <a href="/admin">Panel de sala</a>
+        </nav>
+        <p class="footer-note muted">
+          Proyecto de demostración. Los datos viven en este equipo y se pueden reiniciar con
+          <code class="mono">npm run reset</code>.
+        </p>
+      </div>
+    </footer>
+
+    <!-- ═══════════════════════════════════════════════════════════ diálogos -->
+    <dialog id="lookupDialog" aria-labelledby="lookupTitle">
+      <div class="sheet">
+        <header class="sheet-head">
+          <div>
+            <p class="eyebrow">Gestione su reserva</p>
+            <h3 id="lookupTitle">Buscar mi reserva</h3>
+          </div>
+          <button class="icon-btn" type="button" data-close aria-label="Cerrar">✕</button>
+        </header>
+        <div class="sheet-body" id="lookupBody">
+          <form id="lookupForm" class="lookup-form" novalidate>
+            <label class="field">
+              <span>Código de reserva</span>
+              <input class="input mono" name="code" placeholder="GY-4KQ7" autocomplete="off" />
+            </label>
+            <p class="lookup-or">o</p>
+            <label class="field">
+              <span>Celular con el que reservó</span>
+              <input class="input" name="phone" inputmode="tel" placeholder="+57 310 000 0000" />
+            </label>
+            <button class="btn btn-gold" type="submit">Buscar</button>
+          </form>
+          <div id="lookupResult"></div>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog id="eventDialog" aria-labelledby="eventTitle">
+      <div class="sheet">
+        <header class="sheet-head">
+          <div>
+            <p class="eyebrow">Grupos y eventos</p>
+            <h3 id="eventTitle">Somos más de 12</h3>
+          </div>
+          <button class="icon-btn" type="button" data-close aria-label="Cerrar">✕</button>
+        </header>
+        <div class="sheet-body">
+          <p class="lede">
+            Para grupos grandes cerramos un salón, armamos menú fijo y asignamos un capitán de servicio.
+            Déjenos los datos y lo llamamos el mismo día.
+          </p>
+          <form id="eventForm" class="event-form" novalidate>
+            <div class="grid-2">
+              <label class="field"><span>Nombre y apellido</span><input class="input" name="name" required /></label>
+              <label class="field"><span>Celular</span><input class="input" name="phone" required /></label>
+            </div>
+            <div class="grid-2">
+              <label class="field"><span>Correo</span><input class="input" type="email" name="email" required /></label>
+              <label class="field"><span>Personas</span><input class="input" type="number" name="party" min="13" max="120" value="20" required /></label>
+            </div>
+            <div class="grid-2">
+              <label class="field"><span>Fecha tentativa</span><input class="input" type="date" name="date" required /></label>
+              <label class="field">
+                <span>Franja</span>
+                <select class="select" name="window">
+                  <option value="almuerzo">Almuerzo</option>
+                  <option value="cena">Cena</option>
+                  <option value="cualquiera">Cualquiera</option>
+                </select>
+              </label>
+            </div>
+            <label class="field">
+              <span>Cuénteme del evento</span>
+              <textarea class="textarea" name="notes" placeholder="Cumpleaños de mi mamá, 24 personas, queremos serenata…"></textarea>
+            </label>
+            <button class="btn btn-gold" type="submit">Enviar solicitud</button>
+          </form>
+        </div>
+      </div>
+    </dialog>
+
+    <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+    <script type="module" src="/assets/js/site.js"></script>
+    <script type="module" src="/assets/js/chat.js"></script>
+  </body>
+</html>

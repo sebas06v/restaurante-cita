@@ -1,0 +1,23 @@
+# Blueprint de Render. Importe el repositorio y Render lee este archivo.
+services:
+  - type: web
+    name: el-guayacan
+    runtime: node
+    plan: free
+    # Cero dependencias: no hay nada que instalar ni que compilar.
+    buildCommand: npm ci --omit=dev || true
+    startCommand: npm start
+    healthCheckPath: /api/config
+    envVars:
+      # Render inyecta PORT. HOST debe ser 0.0.0.0 o el health check falla.
+      - key: HOST
+        value: 0.0.0.0
+      - key: NODE_ENV
+        value: production
+      # Secretos: se ponen a mano en el panel de Render, nunca en el repo.
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      # PIN del panel de sala. Si no se define, la app genera uno al azar
+      # y lo imprime en el log de arranque.
+      - key: GUAYACAN_PIN
+        sync: false

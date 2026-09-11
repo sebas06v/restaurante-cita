@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Panel de sala · El Guayacán</title>
+    <meta name="robots" content="noindex" />
+    <meta name="theme-color" content="#0d0b08" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230d0b08'/%3E%3Cpath d='M8 22V10h3l5 8V10h3v12h-3l-5-8v8H8Z' fill='%23e0a63f'/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..600&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/css/tokens.css" />
+    <link rel="stylesheet" href="/assets/css/admin.css" />
+  </head>
+
+  <body class="admin">
+    <div class="grain" aria-hidden="true"></div>
+
+    <!-- Puerta de acceso -->
+    <div class="gate" id="gate">
+      <form class="gate-card card" id="gateForm">
+        <span class="eyebrow">El Guayacán</span>
+        <h1>Panel de sala</h1>
+        <p class="muted">Ingrese el PIN del turno para ver la agenda del día.</p>
+        <label class="field">
+          <span>PIN</span>
+          <input class="input mono" id="gatePin" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="••••" />
+        </label>
+        <button class="btn btn-gold" type="submit">Entrar</button>
+        <p class="gate-hint muted" id="gateHint" hidden></p>
+      </form>
+    </div>
+
+    <div id="app" hidden>
+      <header class="adminbar">
+        <div class="adminbar-left">
+          <a class="admin-brand" href="/">
+            <svg viewBox="0 0 40 40" aria-hidden="true">
+              <path
+                d="M20 4c2.6 4.2 6.7 5.8 11.2 5.5-1.9 4.1-1.4 8.4 1 12.2-4.4-.8-8.4.8-11.4 4-2.9-3.2-7-4.8-11.4-4 2.4-3.8 2.9-8.1 1-12.2C14.9 9.8 17.4 8.2 20 4Z"
+                fill="#e0a63f"
+              />
+              <circle cx="20" cy="19" r="3.2" fill="#c1552d" />
+            </svg>
+            <span>El Guayacán<small>panel de sala</small></span>
+          </a>
+        </div>
+
+        <div class="daynav">
+          <button class="icon-btn" type="button" data-day="-1" aria-label="Día anterior">‹</button>
+          <input class="input input-sm mono" type="date" id="dayInput" />
+          <button class="icon-btn" type="button" data-day="1" aria-label="Día siguiente">›</button>
+          <button class="btn btn-sm" type="button" data-day="today">Hoy</button>
+        </div>
+
+        <nav class="admin-tabs" id="adminTabs">
+          <button class="chip is-on" type="button" data-tab="servicio">Servicio</button>
+          <button class="chip" type="button" data-tab="analitica">Analítica</button>
+          <button class="chip" type="button" data-tab="espera">Lista de espera</button>
+        </nav>
+
+        <div class="adminbar-right">
+          <button class="btn btn-sm" type="button" data-action="export">Exportar CSV</button>
+          <button class="btn btn-sm btn-gold" type="button" data-action="new">Nueva reserva</button>
+        </div>
+      </header>
+
+      <main class="admin-main">
+        <!-- ══════════════════════════════════════════════════════ servicio -->
+        <section class="tab is-active" data-tab-panel="servicio">
+          <div class="day-head">
+            <div>
+              <h2 id="dayTitle">—</h2>
+              <p class="muted" id="daySub">—</p>
+            </div>
+            <div class="kpis" id="kpis"></div>
+          </div>
+
+          <div class="split">
+            <div class="split-main">
+              <div class="card block-card">
+                <div class="card-head">
+                  <h3>Plano del turno</h3>
+                  <div class="timepick">
+                    <label class="sr" for="floorTime">Hora</label>
+                    <input class="input input-sm mono" type="time" id="floorTime" step="900" />
+                    <span class="muted" id="floorSummary"></span>
+                  </div>
+                </div>
+                <div class="floors" id="floors"></div>
+              </div>
+
+              <div class="card block-card">
+                <div class="card-head">
+                  <h3>Línea de tiempo por mesa</h3>
+                  <span class="muted">Arrastre horizontal para ver todo el servicio</span>
+                </div>
+                <div class="timeline-wrap">
+                  <div class="timeline" id="timeline"></div>
+                </div>
+              </div>
+
+              <div class="card block-card">
+                <div class="card-head">
+                  <h3>Reservas del día</h3>
+                  <div class="filters">
+                    <input class="input input-sm" id="search" placeholder="Buscar nombre, código o teléfono" />
+                    <select class="select input-sm" id="statusFilter">
+                      <option value="">Todos los estados</option>
+                    </select>
+                  </div>
+                </div>
+                <div id="resList" class="res-list"></div>
+              </div>
+            </div>
+
+            <aside class="split-side">
+              <div class="card block-card">
+                <div class="card-head"><h3>Bloqueos</h3></div>
+                <form id="blockForm" class="mini-form">
+                  <div class="mini-grid">
+                    <label class="field"><span>Desde</span><input class="input input-sm" type="time" name="from" step="900" value="18:00" /></label>
+                    <label class="field"><span>Hasta</span><input class="input input-sm" type="time" name="to" step="900" value="20:00" /></label>
+                  </div>
+                  <label class="field">
+                    <span>Alcance</span>
+                    <select class="select input-sm" name="scope" id="blockScope"></select>
+                  </label>
+                  <label class="field">
+                    <span>Motivo</span>
+                    <input class="input input-sm" name="reason" placeholder="Evento privado, mantenimiento…" />
+                  </label>
+                  <button class="btn btn-sm" type="submit">Bloquear</button>
+                </form>
+                <ul class="block-list" id="blockList"></ul>
+              </div>
+
+              <div class="card block-card">
+                <div class="card-head"><h3>Notas de servicio</h3></div>
+                <ul class="notes" id="serviceNotes"></ul>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <!-- ═════════════════════════════════════════════════════ analítica -->
+        <section class="tab" data-tab-panel="analitica" hidden>
+          <div class="day-head">
+            <div>
+              <h2>Cómo venimos</h2>
+              <p class="muted">Últimos días de servicio, cubiertos y comportamiento de la agenda.</p>
+            </div>
+            <div class="kpis" id="statTotals"></div>
+          </div>
+          <div class="stat-grid">
+            <div class="card block-card stat-wide">
+              <div class="card-head"><h3>Cubiertos por día</h3><span class="muted" id="statRange"></span></div>
+              <div class="bars" id="statSeries"></div>
+            </div>
+            <div class="card block-card">
+              <div class="card-head"><h3>Por salón</h3></div>
+              <div id="statZones" class="ranks"></div>
+            </div>
+            <div class="card block-card">
+              <div class="card-head"><h3>Curva de llegada</h3></div>
+              <div class="bars bars-slim" id="statHours"></div>
+            </div>
+            <div class="card block-card">
+              <div class="card-head"><h3>Motivos de celebración</h3></div>
+              <div id="statOccasions" class="ranks"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═════════════════════════════════════════════════════════ espera -->
+        <section class="tab" data-tab-panel="espera" hidden>
+          <div class="day-head">
+            <div>
+              <h2>Lista de espera y eventos</h2>
+              <p class="muted">Solicitudes que entraron por la web. Llame y márquelas.</p>
+            </div>
+          </div>
+          <div class="card block-card">
+            <div id="waitlist" class="res-list"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- Cajón de detalle -->
+    <dialog id="detailDialog" aria-labelledby="detailTitle">
+      <div class="sheet">
+        <header class="sheet-head">
+          <div>
+            <p class="eyebrow" id="detailCode">—</p>
+            <h3 id="detailTitle">—</h3>
+          </div>
+          <button class="icon-btn" type="button" data-close aria-label="Cerrar">✕</button>
+        </header>
+        <div class="sheet-body" id="detailBody"></div>
+        <footer class="sheet-foot" id="detailFoot"></footer>
+      </div>
+    </dialog>
+
+    <!-- Nueva reserva -->
+    <dialog id="newDialog" aria-labelledby="newTitle">
+      <div class="sheet">
+        <header class="sheet-head">
+          <div>
+            <p class="eyebrow">Teléfono o walk-in</p>
+            <h3 id="newTitle">Nueva reserva</h3>
+          </div>
+          <button class="icon-btn" type="button" data-close aria-label="Cerrar">✕</button>
+        </header>
+        <div class="sheet-body">
+          <form id="newForm" class="mini-form">
+            <div class="mini-grid">
+              <label class="field"><span>Nombre y apellido</span><input class="input" name="name" required /></label>
+              <label class="field"><span>Celular</span><input class="input" name="phone" required /></label>
+            </div>
+            <div class="mini-grid">
+              <label class="field"><span>Correo</span><input class="input" type="email" name="email" value="mesa@elguayacan.co" required /></label>
+              <label class="field"><span>Personas</span><input class="input" type="number" name="party" min="1" max="12" value="2" required /></label>
+            </div>
+            <div class="mini-grid">
+              <label class="field"><span>Fecha</span><input class="input" type="date" name="date" required /></label>
+              <label class="field"><span>Hora</span><input class="input" type="time" name="time" step="900" value="19:00" required /></label>
+            </div>
+            <div class="mini-grid">
+              <label class="field"><span>Salón</span><select class="select" name="zone" id="newZone"></select></label>
+              <label class="field"><span>Mesa (opcional)</span><select class="select" name="tableId" id="newTable"></select></label>
+            </div>
+            <label class="field"><span>Notas</span><textarea class="textarea" name="notes" rows="2"></textarea></label>
+            <button class="btn btn-gold" type="submit">Guardar reserva</button>
+          </form>
+        </div>
+      </div>
+    </dialog>
+
+    <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+    <script type="module" src="/assets/js/admin.js"></script>
+  </body>
+</html>

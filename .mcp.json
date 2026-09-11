@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "guayacan": {
+      "command": "node",
+      "args": ["mcp/server.js"],
+      "env": {
+        "GUAYACAN_URL": "http://127.0.0.1:4321",
+        "GUAYACAN_PIN": "2408"
+      }
+    }
+  }
+}

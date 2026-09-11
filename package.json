@@ -1,0 +1,19 @@
+{
+  "name": "el-guayacan-reservas",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sistema de reservas para El Guayacan - cocina colombiana de autor",
+  "type": "module",
+  "engines": {
+    "node": ">=20.6.0"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "reset": "node server/reset.js",
+    "mcp": "node mcp/server.js",
+    "mcp:flujo": "node mcp/flujo-demo.js",
+    "mcp:flujo:json": "node mcp/flujo-demo.js --json",
+    "postman": "node postman/build.js"
+  }
+}

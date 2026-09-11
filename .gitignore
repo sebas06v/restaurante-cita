@@ -1,0 +1,18 @@
+# dependencias
+node_modules/
+
+# secretos: la llave de la API nunca va al repositorio
+.env
+.env.*
+!.env.example
+
+# la agenda es datos locales, se regenera con npm run reset
+data/db.json
+data/*.tmp
+data/*.corrupto-*
+
+# basura del sistema
+Thumbs.db
+desktop.ini
+.DS_Store
+*.log
