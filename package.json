@@ -17,6 +17,7 @@
     "postman": "node postman/build.js"
   },
   "dependencies": {
-    "bullmq": "^6.3.4"
+    "bullmq": "^6.3.4",
+    "nodemailer": "^10.0.8"
   }
 }

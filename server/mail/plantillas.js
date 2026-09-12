@@ -11,7 +11,7 @@
  * ==========================================================================
  */
 
-import { RESTAURANT, ZONES, EXPERIENCES, PREFERENCES } from '../config.js';
+import { RESTAURANT, ZONES, EXPERIENCES, PREFERENCES, OCCASIONS } from '../config.js';
 import { prettyDate, prettyTime } from '../time.js';
 
 const ORO = '#b07d1f';
@@ -22,6 +22,7 @@ const LINEA = '#e4dccb';
 const money = (n) => `$ ${Math.round(n || 0).toLocaleString('es-CO')}`;
 const people = (n) => `${n} ${n === 1 ? 'persona' : 'personas'}`;
 const zoneName = (id) => (ZONES.find((z) => z.id === id) || {}).name || 'Salón por asignar';
+const occasionLabel = (id) => (OCCASIONS.find((o) => o.id === id) || {}).label || id;
 
 /** El sitio, para los enlaces. En Render se fija con PUBLIC_URL. */
 const sitio = () => (process.env.PUBLIC_URL || 'http://127.0.0.1:4321').replace(/\/$/, '');
@@ -116,10 +117,11 @@ const plano = (titulo, entradilla, filas, extra = '') =>
 
 const datos = (r) => [
   ['Código', `<span style="font-family:monospace;letter-spacing:1px">${r.code}</span>`],
+  ['A nombre de', r.name],
   ['Cuándo', `${prettyDate(r.date, true)}, ${prettyTime(r.time)}`],
   ['Personas', people(r.party)],
   ['Dónde', `${zoneName(r.zone)} · mesa ${r.tableId}`],
-  r.occasion && r.occasion !== 'ninguna' ? ['Ocasión', r.occasion] : null
+  r.occasion && r.occasion !== 'ninguna' ? ['Ocasión', occasionLabel(r.occasion)] : null
 ];
 
 export const PLANTILLAS = {

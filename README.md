@@ -263,11 +263,48 @@ y `REDIS_URL=redis://127.0.0.1:6379` en el `.env`.
 
 ### Por dónde sale el correo
 
-| Modo | Cuándo | Qué hace |
+| Modo | Se activa con | ¿Le llega a cualquiera? |
 | --- | --- | --- |
-| `bandeja` | por defecto | No sale a internet: el correo queda armado y se ve en el panel, pestaña **Correos** |
-| `resend` | con `RESEND_API_KEY` | Envío real por HTTP, sin dependencias |
-| `consola` | con `MAIL_MODO=consola` | Lo escupe por stderr |
+| `smtp` | `SMTP_HOST` + `SMTP_USER` + `SMTP_PASS` | **Sí**, sin dominio propio |
+| `brevo` | `BREVO_API_KEY` | **Sí**, verificando un solo correo remitente |
+| `resend` | `RESEND_API_KEY` | Solo con dominio propio verificado |
+| `bandeja` | por defecto | No sale: queda en el panel, pestaña **Correos** |
+| `consola` | `MAIL_MODO=consola` | No sale: va a stderr |
+
+Se escogen en ese orden, así que si define varias gana SMTP.
+
+#### Escribirle a cualquiera sin comprar dominio
+
+Verificar un remitente no es un capricho del proveedor: es lo que impide que
+cualquiera mande correos haciéndose pasar por otro. Hay dos maneras de
+cumplirlo sin dominio:
+
+**Gmail con contraseña de aplicación.** Active la verificación en dos pasos,
+genere una contraseña en <https://myaccount.google.com/apppasswords> y ponga:
+
+```
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=sucorreo@gmail.com
+SMTP_PASS=la contraseña de aplicación, 16 letras
+MAIL_FROM=El Guayacán <sucorreo@gmail.com>
+```
+
+Límite de unos 500 correos al día. El remitente tiene que ser esa misma
+cuenta: Gmail reescribe cualquier otro.
+
+**Brevo.** Cree la cuenta, verifique un correo remitente (sirve el mismo
+Gmail) y use `BREVO_API_KEY`. Son 300 correos diarios gratis y va por HTTPS,
+así que no depende de que la plataforma deje salir los puertos SMTP —algunas
+los bloquean para frenar el spam.
+
+**Resend** queda para cuando tenga dominio: es el de mejor entregabilidad,
+pero exige registros DNS. Un subdominio de Render (`algo.onrender.com`) **no
+sirve**: la verificación necesita control del DNS, y esa zona no es suya.
+
+Si el proveedor rechaza un envío, el error 4xx se marca como permanente —no se
+reintenta, porque reintentar no lo arregla— y el trabajo aparece en **Correos
+→ Trabajos fallidos** con el motivo. No falla en silencio.
 
 El modo bandeja no es un placebo: el correo se renderiza completo, en HTML de
 correo (tablas y estilos en línea, que es lo que entiende Outlook) y con su

@@ -27,9 +27,22 @@ services:
       # de cualquier Redis (Upstash tiene plan gratis).
       - key: REDIS_URL
         sync: false
-      # Envío real de correos. Sin esta variable los correos se guardan en
-      # la bandeja del panel en vez de salir.
+      # Envío real de correos. Sin ninguna, los correos se guardan en la
+      # bandeja del panel en vez de salir. Vea el README: para escribirle a
+      # cualquier destinatario sin dominio propio, use SMTP o Brevo.
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: BREVO_API_KEY
+        sync: false
       - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
         sync: false
       # Para los enlaces dentro de los correos.
       - key: PUBLIC_URL
