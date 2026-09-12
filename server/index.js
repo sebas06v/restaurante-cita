@@ -2,6 +2,8 @@
  * Servidor HTTP: enrutador de la API + archivos estáticos.
  * Node puro, sin dependencias. `npm start` y listo.
  */
+import './env.js'; // debe ir de PRIMERO: ver el comentario de ese archivo
+
 import http from 'node:http';
 import process from 'node:process';
 import fs from 'node:fs';
@@ -26,13 +28,6 @@ import {
 } from '../mcp/protocol.js';
 
 const mcpTools = () => MCP_TOOL_DEFS.map(publicTool);
-
-/* Secretos locales: .env está fuera de git. Si no existe, no pasa nada. */
-try {
-  process.loadEnvFile(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '.env'));
-} catch {
-  /* sin .env: el chat simplemente queda apagado */
-}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');

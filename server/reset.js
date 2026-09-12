@@ -1,4 +1,6 @@
 /** Borra la base y vuelve a sembrar datos de ejemplo. `npm run reset` */
+import './env.js';
+
 import fs from 'node:fs';
 import path from 'node:path';
 import { DATA_DIR, load } from './db.js';
