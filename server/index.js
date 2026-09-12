@@ -14,6 +14,8 @@ import { load } from './db.js';
 import * as api from './api.js';
 import { ApiError } from './api.js';
 import { reply as chatReply, chatInfo } from './chat.js';
+import { iniciarCola, cerrarCola, colaInfo } from './queue/correos.js';
+import { transporteInfo } from './mail/transporte.js';
 import {
   dispatch as mcpDispatch,
   METHODS as MCP_METHODS,
@@ -91,6 +93,9 @@ route('PATCH', '/api/admin/waitlist/:id', api.adminWaitlist, { admin: true });
 route('POST', '/api/admin/reservations', (ctx) => api.createReservation({ ...ctx, admin: true }), { admin: true });
 route('PATCH', '/api/admin/reservations/:id', api.adminUpdateReservation, { admin: true });
 route('PATCH', '/api/admin/payments/:id', api.adminMarkPayment, { admin: true });
+route('GET', '/api/admin/mail', api.adminMail, { admin: true });
+route('GET', '/api/admin/mail/:id', api.adminMailOne, { admin: true });
+route('POST', '/api/admin/mail/:id/retry', api.adminMailRetry, { admin: true });
 route('POST', '/api/admin/blocks', api.adminCreateBlock, { admin: true });
 route('DELETE', '/api/admin/blocks/:id', api.adminDeleteBlock, { admin: true });
 
@@ -323,6 +328,17 @@ const server = http.createServer(async (req, res) => {
 
 load();
 
+// La cola se levanta antes de escuchar: si hay Redis, se conecta; si no,
+// sigue en memoria y lo dice en el banner.
+await iniciarCola();
+
+for (const senal of ['SIGINT', 'SIGTERM']) {
+  process.on(senal, async () => {
+    await cerrarCola();
+    process.exit(0);
+  });
+}
+
 server.listen(PORT, HOST, () => {
   const url = `http://${HOST}:${PORT}`;
   console.log('');
@@ -348,5 +364,10 @@ server.listen(PORT, HOST, () => {
       console.log('                  el sitio funciona, pero el chat no aparece para los visitantes');
     }
   }
+  const cola = colaInfo();
+  const correo = transporteInfo();
+  console.log(
+    `  Cola de correos ${cola.modo === 'bullmq' ? 'BullMQ sobre Redis' : 'en memoria · sin REDIS_URL'} · envío: ${correo.modo}`
+  );
   console.log('');
 });

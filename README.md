@@ -4,8 +4,9 @@ Reservas para un restaurante colombiano de autor en Bogotá: sitio público con
 reserva en cuatro pasos, panel de sala para el equipo y un servidor MCP para
 operarlo desde un asistente.
 
-Node puro, **cero dependencias** y sin build. Ni el sitio, ni la API, ni el panel,
-ni el MCP, ni el chat con IA usan una sola librería externa.
+Sin build. El sitio, la API, el panel, el MCP y el chat con IA no usan ninguna
+librería externa; la única dependencia del proyecto es **BullMQ**, para la cola
+de correos, y la app arranca igual sin Redis.
 
 ```bash
 npm start           # http://127.0.0.1:4321
@@ -65,6 +66,8 @@ public/          sitio y panel, sin framework ni build
   admin.html       panel de sala
   assets/css       tokens de diseño + hojas del sitio y del panel
   assets/js        lib compartida, site.js, admin.js
+  mail/            plantillas de los correos y por dónde salen
+  queue/           la cola de correos (BullMQ, con respaldo en memoria)
 mcp/             MCP: catálogo (protocol.js), stdio (server.js) y demo del flujo
 postman/         generador y colección para probar el MCP por HTTP
 docs/            documentación del MCP con diagramas
@@ -221,6 +224,57 @@ Se ajusta desde el entorno, sin tocar código:
 | `GUAYACAN_PAGO_MONTO` | `30000` | Valor en pesos |
 | `GUAYACAN_PAGO_EXIGIR` | `todos` | `todos`, `grandes` (solo desde 8 personas) o `ninguno` (apaga el cobro) |
 
+## La cola de correos
+
+Mandar un correo no puede bloquear la respuesta de una reserva: el huésped no
+tiene por qué esperar a que un SMTP conteste, ni perder la mesa porque el
+proveedor de correo se cayó. Se encola y se responde.
+
+Cuatro trabajos, con reintentos y backoff exponencial:
+
+| Trabajo | Cuándo |
+| --- | --- |
+| `confirmacion` | al crear la reserva |
+| `pago` | cuando entra el pago |
+| `recordatorio` | 24 h antes de la reserva |
+| `cancelacion` | al cancelar |
+
+El recordatorio es la razón de fondo para tener una cola de verdad: es un
+trabajo **retrasado días**, y un `setTimeout` no sobrevive a un despliegue.
+
+### Dos modos
+
+Con **`REDIS_URL`** corre [BullMQ](https://bullmq.io) de verdad: reintentos,
+trabajos retrasados que sobreviven un reinicio y los fallidos guardados para
+revisarlos. El worker va **dentro del mismo proceso web** — en Render un
+Background Worker aparte es de pago, y para este volumen no hace falta.
+
+Sin `REDIS_URL` cae a una cola en memoria con la misma interfaz, para que la
+app arranque sin instalar nada. Esa versión **no sobrevive un reinicio**, que
+es justo lo que Redis viene a resolver; el panel lo dice en letra grande.
+
+Para probar con Redis de verdad en local:
+
+```bash
+docker run -d -p 6379:6379 redis:7-alpine
+```
+
+y `REDIS_URL=redis://127.0.0.1:6379` en el `.env`.
+
+### Por dónde sale el correo
+
+| Modo | Cuándo | Qué hace |
+| --- | --- | --- |
+| `bandeja` | por defecto | No sale a internet: el correo queda armado y se ve en el panel, pestaña **Correos** |
+| `resend` | con `RESEND_API_KEY` | Envío real por HTTP, sin dependencias |
+| `consola` | con `MAIL_MODO=consola` | Lo escupe por stderr |
+
+El modo bandeja no es un placebo: el correo se renderiza completo, en HTML de
+correo (tablas y estilos en línea, que es lo que entiende Outlook) y con su
+alternativa en texto plano. Es exactamente lo que le llegaría al huésped.
+
+Agregar otro proveedor es un caso más en `server/mail/transporte.js`.
+
 ## Desplegar en Render
 
 El repositorio trae [`render.yaml`](render.yaml): en Render, **New → Blueprint**,
@@ -235,6 +289,9 @@ Dos variables se ponen a mano en el panel de Render (nunca en el repo):
 | `GUAYACAN_PIN` | PIN del panel de sala. Si no la define, la app genera uno al azar y lo imprime en el log de arranque |
 | `GUAYACAN_PAGO_MONTO` | Valor de la reserva. Default 30.000 |
 | `GUAYACAN_PAGO_EXIGIR` | `todos`, `grandes` o `ninguno` |
+| `REDIS_URL` | Redis para la cola. Sin ella, cola en memoria |
+| `RESEND_API_KEY` | Envío real de correos. Sin ella, bandeja |
+| `PUBLIC_URL` | La URL pública, para los enlaces de los correos |
 
 `HOST=0.0.0.0` y `NODE_ENV=production` ya vienen en el blueprint. `HOST` es
 obligatorio: atado a `127.0.0.1` el health check de Render nunca pasa.

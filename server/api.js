@@ -43,6 +43,8 @@ import {
   weekday
 } from './time.js';
 import { reservationIcs } from './ics.js';
+import { alReservar, alPagar, alCancelar, estadoCola, reintentar } from './queue/correos.js';
+import { bandeja, correoDeLaBandeja, transporteInfo } from './mail/transporte.js';
 
 class ApiError extends Error {
   constructor(status, message, extra = {}) {
@@ -352,6 +354,9 @@ export async function createReservation({ body, admin = false }) {
     logEvent({ action: 'reserva-creada', code: reservation.code, date, time, party });
   });
 
+  // La confirmación sale por la cola: el huésped no espera al correo.
+  alReservar(reservation);
+
   return ok({ reservation: publicReservation(reservation) }, 201);
 }
 
@@ -402,6 +407,7 @@ export async function updateReservation({ params, body }) {
       current.history.push({ at: current.cancelledAt, action: 'cancelada', by: 'huésped' });
       logEvent({ action: 'reserva-cancelada', code: current.code });
     });
+    alCancelar(current);
     return ok({ reservation: publicReservation(current), message: 'Reserva cancelada. Ojalá en otra ocasión.' });
   }
 
@@ -837,6 +843,8 @@ export async function payReservation({ params, body }) {
     });
   }
 
+  alPagar(r);
+
   return ok({
     reservation: publicReservation(r),
     recibo: {
@@ -878,4 +886,32 @@ export async function adminMarkPayment({ params, body }) {
   });
 
   return ok({ reservation: publicReservation(r) });
+}
+
+
+/* ═══════════════════════════════════════════════════════ cola de correos ══ */
+
+/** Estado de la cola y la bandeja, para el panel de sala. */
+export async function adminMail() {
+  return ok({
+    cola: await estadoCola(),
+    transporte: transporteInfo(),
+    bandeja: bandeja(30).map(({ html, ...resto }) => resto)
+  });
+}
+
+/** El correo armado, tal como le llegaría al huésped. */
+export function adminMailOne({ params }) {
+  const correo = correoDeLaBandeja(params.id);
+  if (!correo) throw new ApiError(404, 'Ese correo ya no está en la bandeja.');
+  return { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' }, body: correo.html };
+}
+
+/** Reintentar un trabajo fallido. */
+export async function adminMailRetry({ params }) {
+  try {
+    return ok(await reintentar(params.id));
+  } catch (err) {
+    throw new ApiError(409, err.message);
+  }
 }

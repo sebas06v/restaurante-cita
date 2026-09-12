@@ -61,6 +61,7 @@
           <button class="chip is-on" type="button" data-tab="servicio">Servicio</button>
           <button class="chip" type="button" data-tab="analitica">Analítica</button>
           <button class="chip" type="button" data-tab="espera">Lista de espera</button>
+          <button class="chip" type="button" data-tab="correos">Correos</button>
         </nav>
 
         <div class="adminbar-right">
@@ -186,6 +187,35 @@
           </div>
           <div class="card block-card">
             <div id="waitlist" class="res-list"></div>
+          </div>
+        </section>
+        <!-- ════════════════════════════════════════════════════════ correos -->
+        <section class="tab" data-tab-panel="correos" hidden>
+          <div class="day-head">
+            <div>
+              <h2>Cola de correos</h2>
+              <p class="muted" id="mailModo">—</p>
+            </div>
+            <div class="kpis" id="mailCounts"></div>
+          </div>
+
+          <div class="split">
+            <div class="split-main">
+              <div class="card block-card">
+                <div class="card-head">
+                  <h3>Bandeja</h3>
+                  <span class="muted">Lo que se le envió a cada huésped</span>
+                </div>
+                <div id="mailList" class="res-list"></div>
+              </div>
+            </div>
+
+            <aside class="split-side">
+              <div class="card block-card">
+                <div class="card-head"><h3>Trabajos fallidos</h3></div>
+                <div id="mailFailed" class="res-list"></div>
+              </div>
+            </aside>
           </div>
         </section>
       </main>

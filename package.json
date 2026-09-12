@@ -15,5 +15,8 @@
     "mcp:flujo": "node mcp/flujo-demo.js",
     "mcp:flujo:json": "node mcp/flujo-demo.js --json",
     "postman": "node postman/build.js"
+  },
+  "dependencies": {
+    "bullmq": "^6.3.4"
   }
 }

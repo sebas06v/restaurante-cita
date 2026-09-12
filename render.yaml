@@ -21,3 +21,16 @@ services:
       # y lo imprime en el log de arranque.
       - key: GUAYACAN_PIN
         sync: false
+      # Redis para la cola de correos (BullMQ). Sin esta variable la cola
+      # sigue funcionando en memoria, pero lo pendiente se pierde al
+      # reiniciar. Pegue aquí la URL interna del Key Value de Render, o la
+      # de cualquier Redis (Upstash tiene plan gratis).
+      - key: REDIS_URL
+        sync: false
+      # Envío real de correos. Sin esta variable los correos se guardan en
+      # la bandeja del panel en vez de salir.
+      - key: RESEND_API_KEY
+        sync: false
+      # Para los enlaces dentro de los correos.
+      - key: PUBLIC_URL
+        sync: false

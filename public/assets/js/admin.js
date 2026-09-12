@@ -131,6 +131,7 @@ function wireChrome() {
     });
     if (state.tab === 'analitica') loadStats();
     if (state.tab === 'espera') loadWaitlist();
+    if (state.tab === 'correos') loadMail();
   });
 
   $('#search').addEventListener(
@@ -822,6 +823,102 @@ async function loadWaitlist() {
         admin: true
       });
       loadWaitlist();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  };
+}
+
+
+/* ═══════════════════════════════════════════════════════ cola de correos */
+
+async function loadMail() {
+  let data;
+  try {
+    data = await api('/api/admin/mail', { admin: true });
+  } catch (err) {
+    toast(err.message, 'error');
+    return;
+  }
+
+  const { cola, transporte, bandeja } = data;
+
+  // Que quede claro si la cola aguanta un reinicio o no: es la diferencia
+  // entre tener Redis y no tenerlo.
+  $('#mailModo').innerHTML = cola.persistente
+    ? `BullMQ sobre Redis · los trabajos sobreviven un reinicio · envío por <b>${esc(transporte.modo)}</b>`
+    : `<b style="color:var(--warn)">Cola en memoria</b>: sin REDIS_URL, lo pendiente se pierde al reiniciar · envío por <b>${esc(
+        transporte.modo
+      )}</b>`;
+
+  fill(
+    $('#mailCounts'),
+    `<div class="kpi"><b>${cola.counts.completed || 0}</b><span>enviados</span></div>
+     <div class="kpi"><b>${cola.counts.delayed || 0}</b><span>programados</span></div>
+     <div class="kpi"><b>${cola.counts.waiting || 0}</b><span>en espera</span></div>
+     <div class="kpi ${cola.counts.failed ? 'is-bad' : ''}"><b>${cola.counts.failed || 0}</b><span>fallidos</span></div>`
+  );
+
+  fill(
+    $('#mailList'),
+    bandeja.length
+      ? bandeja
+          .map(
+            (m) => `<div class="res">
+              <span class="res-time">${new Date(m.at).toLocaleTimeString('es-CO', {
+                hour: '2-digit',
+                minute: '2-digit'
+              })}</span>
+              <span>
+                <span class="res-name">${esc(m.asunto)}</span>
+                <span class="res-meta">${esc(m.para)} · ${esc(m.tipo)} · <span class="mono">${esc(
+                  m.code || ''
+                )}</span></span>
+              </span>
+              <span class="res-tags">
+                <button class="btn btn-sm" type="button" data-ver-correo="${esc(m.id)}">Ver</button>
+              </span>
+              <span class="badge badge-ok">${esc(m.via)}</span>
+            </div>`
+          )
+          .join('')
+      : `<div class="empty">Sin correos todavía.${
+          transporte.real ? '' : ' En modo bandeja se guardan aquí en vez de salir a internet.'
+        }</div>`
+  );
+
+  $('#mailList').onclick = (e) => {
+    const btn = e.target.closest('[data-ver-correo]');
+    if (btn) window.open(`/api/admin/mail/${btn.dataset.verCorreo}?pin=${state.pin}`, '_blank', 'noopener');
+  };
+
+  fill(
+    $('#mailFailed'),
+    cola.fallidos.length
+      ? cola.fallidos
+          .map(
+            (f) => `<div class="res">
+              <span class="res-time">×${f.intentos}</span>
+              <span>
+                <span class="res-name">${esc(f.datos?.tipo || 'trabajo')}</span>
+                <span class="res-meta">${esc(f.datos?.code || '')} · ${esc(String(f.error || '').slice(0, 80))}</span>
+              </span>
+              <span class="res-tags">
+                <button class="btn btn-sm" type="button" data-reintentar="${esc(f.id)}">Reintentar</button>
+              </span>
+            </div>`
+          )
+          .join('')
+      : '<div class="empty">Ninguno. Todo salió.</div>'
+  );
+
+  $('#mailFailed').onclick = async (e) => {
+    const btn = e.target.closest('[data-reintentar]');
+    if (!btn) return;
+    try {
+      await api(`/api/admin/mail/${btn.dataset.reintentar}/retry`, { method: 'POST', admin: true });
+      toast('Reencolado.', 'ok');
+      loadMail();
     } catch (err) {
       toast(err.message, 'error');
     }
