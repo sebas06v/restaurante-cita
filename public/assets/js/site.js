@@ -1201,8 +1201,17 @@ function wireDialogs() {
   wireQuickHash();
 }
 
-function wireQuickHash() {
+async function wireQuickHash() {
   if (location.hash === '#mi-reserva') $('#lookupDialog').showModal();
+
+  // Enlace directo a la pantalla de pago. Lo usan el correo de confirmación
+  // y la página de la lista de espera, que llegan de fuera del sitio.
+  const pagar = new URLSearchParams(location.search).get('pagar');
+  if (pagar) {
+    window.scrollTo({ top: $('#reservar').offsetTop - 80, behavior: 'smooth' });
+    await renderPayment(pagar);
+    showPanel('pago');
+  }
 }
 
 function wireQuickbar() {

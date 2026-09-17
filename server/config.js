@@ -477,3 +477,37 @@ export const ADMIN_PIN =
 
 /** ¿El panel está protegido con el PIN de demostración, el que sale publicado? */
 export const PIN_IS_DEMO = ADMIN_PIN === DEMO_PIN;
+
+/**
+ * ==========================================================================
+ * Lista de espera con oferta automática
+ * ==========================================================================
+ * Cuando una mesa se suelta (cancelación, no-show, o alguien que no pagó a
+ * tiempo) el sistema le ofrece ese puesto a UNA persona de la lista, por
+ * correo, con un tiempo límite. Si no contesta, le pasa al que sigue.
+ *
+ * Se ajusta desde el entorno:
+ *   GUAYACAN_ESPERA         off para apagar todo el mecanismo
+ *   GUAYACAN_ESPERA_LARGA   minutos para contestar si falta más de un día
+ *   GUAYACAN_ESPERA_CORTA   minutos para contestar si es para hoy o mañana
+ *   GUAYACAN_PAGO_MINUTOS   minutos para pagar antes de soltar la mesa (0 = nunca)
+ */
+export const ESPERA = {
+  activa: process.env.GUAYACAN_ESPERA !== 'off',
+  // Hora y media si hay tiempo de sobra; media hora si el servicio es ya.
+  ventanaLargaMin: Number(process.env.GUAYACAN_ESPERA_LARGA) || 90,
+  ventanaCortaMin: Number(process.env.GUAYACAN_ESPERA_CORTA) || 30,
+  umbralHoras: 24,
+  // Una oferta que vence después de que empiece el servicio no sirve de nada.
+  margenAntesDelServicioMin: 20,
+  minutosParaPagar: Number(process.env.GUAYACAN_PAGO_MINUTOS ?? 30)
+};
+
+/** Estados por los que pasa alguien en la lista de espera. */
+export const ESTADOS_ESPERA = [
+  { id: 'esperando', label: 'Esperando' },
+  { id: 'ofrecida', label: 'Se le ofreció' },
+  { id: 'aceptada', label: 'Aceptó' },
+  { id: 'vencida', label: 'Se le venció' },
+  { id: 'cerrado', label: 'Cerrado' }
+];

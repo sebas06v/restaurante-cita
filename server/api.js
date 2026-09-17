@@ -16,6 +16,8 @@ import {
   ADMIN_PIN,
   PIN_IS_DEMO,
   PAGO,
+  ESPERA,
+  ESTADOS_ESPERA,
   requierePago
 } from './config.js';
 import { db, write, nextId, makeCode, logEvent } from './db.js';
@@ -43,7 +45,8 @@ import {
   weekday
 } from './time.js';
 import { reservationIcs } from './ics.js';
-import { alReservar, alPagar, alCancelar, estadoCola, reintentar } from './queue/correos.js';
+import { alReservar, alPagar, alCancelar, estadoCola, reintentar, programarVencimientoPago } from './queue/correos.js';
+import { evaluarLiberacion, aceptarOferta, rechazarOferta, verOferta, ofrecerAMano, resumenEspera } from './espera.js';
 import { bandeja, correoDeLaBandeja, transporteInfo } from './mail/transporte.js';
 
 class ApiError extends Error {
@@ -356,6 +359,9 @@ export async function createReservation({ body, admin = false }) {
 
   // La confirmación sale por la cola: el huésped no espera al correo.
   alReservar(reservation);
+  // Y si se queda en «por pagar», un reloj que suelta la mesa y se la
+  // ofrece a quien esté en la lista de espera.
+  programarVencimientoPago(reservation);
 
   return ok({ reservation: publicReservation(reservation) }, 201);
 }
@@ -408,6 +414,8 @@ export async function updateReservation({ params, body }) {
       logEvent({ action: 'reserva-cancelada', code: current.code });
     });
     alCancelar(current);
+    // La mesa vuelve a la agenda: a ver si alguien de la lista la quiere.
+    evaluarLiberacion({ date: current.date, time: current.time, motivo: 'cancelación' });
     return ok({ reservation: publicReservation(current), message: 'Reserva cancelada. Ojalá en otra ocasión.' });
   }
 
@@ -505,8 +513,13 @@ export async function joinWaitlist({ body }) {
     party,
     date: body.date,
     window: String(body.window || 'cualquiera'),
+    // Sin salón quiere decir «me da igual», que es lo que más ayuda a que
+    // le salga algo.
+    zone: ZONES.some((z) => z.id === body.zone) ? body.zone : null,
     notes: String(body.notes || '').trim().slice(0, 400),
     status: 'esperando',
+    offer: null,
+    offers: 0,
     createdAt: new Date().toISOString()
   };
 
@@ -518,7 +531,9 @@ export async function joinWaitlist({ body }) {
   return ok(
     {
       entry,
-      message: `Quedó en la lista para el ${prettyDate(entry.date)}. Le escribimos si se libera una mesa.`
+      message: ESPERA.activa
+        ? `Quedó en la lista para el ${prettyDate(entry.date)}. Si se suelta una mesa que le sirva, le llega un correo al instante con el botón para tomarla.`
+        : `Quedó en la lista para el ${prettyDate(entry.date)}. Le escribimos si se libera una mesa.`
     },
     201
   );
@@ -591,6 +606,8 @@ export async function adminUpdateReservation({ params, body }) {
   const r = state.reservations.find((x) => x.id === params.id || x.code === params.id);
   if (!r) throw new ApiError(404, 'Reserva no encontrada.');
 
+  const estabaOcupando = ACTIVE_STATUSES.includes(r.status);
+
   if (body.status !== undefined) {
     if (!VALID_STATUS.has(body.status)) bad('Estado desconocido.');
     r.status = body.status;
@@ -620,6 +637,12 @@ export async function adminUpdateReservation({ params, body }) {
     r.history.push({ at: r.updatedAt, action: `panel: ${body.status || 'edición'}`, by: 'equipo' });
     logEvent({ action: 'panel-reserva', code: r.code, status: r.status });
   });
+
+  // Si el panel la sacó de circulación —canceló o marcó que no llegó—, esa
+  // mesa se soltó de verdad y le toca a la lista de espera.
+  if (estabaOcupando && ['cancelada', 'no-show'].includes(r.status)) {
+    evaluarLiberacion({ date: r.date, time: r.time, motivo: r.status === 'no-show' ? 'no llegó' : 'cancelación' });
+  }
 
   return ok({ reservation: publicReservation(r) });
 }
@@ -749,17 +772,73 @@ export function adminExport({ query }) {
   };
 }
 
+const ESTADOS_VALIDOS = new Set(ESTADOS_ESPERA.map((e) => e.id));
+
 export async function adminWaitlist({ method, params, body }) {
   if (method === 'GET') {
-    return ok({ waitlist: db().waitlist.slice().reverse() });
+    return ok({
+      waitlist: db().waitlist.slice().reverse(),
+      estados: ESTADOS_ESPERA,
+      resumen: resumenEspera()
+    });
   }
   const entry = db().waitlist.find((w) => w.id === params.id);
   if (!entry) throw new ApiError(404, 'Registro no encontrado.');
   await write(() => {
-    entry.status = ['esperando', 'avisado', 'cerrado'].includes(body.status) ? body.status : entry.status;
+    // 'avisado' es de la versión anterior, cuando el aviso era una llamada.
+    const pedido = body.status === 'avisado' ? 'ofrecida' : body.status;
+    entry.status = ESTADOS_VALIDOS.has(pedido) ? pedido : entry.status;
     entry.updatedAt = new Date().toISOString();
   });
   return ok({ entry });
+}
+
+/** Ofrecerle una mesa a alguien de la lista, a dedo, desde el panel. */
+export async function adminOfferNow({ params, body }) {
+  if (!isValidHHMM(body.time)) bad('Indique la hora que le quiere ofrecer.', { field: 'time' });
+  const salida = await ofrecerAMano({ entryId: params.id, date: body.date, time: body.time });
+  if (!salida.ofreció) throw new ApiError(409, `No se pudo ofrecer: ${salida.porque}.`);
+  return ok({ oferta: salida.oferta, message: `Le salió el correo a ${salida.para.name}.` });
+}
+
+/* ═════════════════════════════════════════════ la oferta, para el huésped ══ */
+
+/**
+ * La pantalla a la que llega desde el correo. No pide PIN ni contraseña: el
+ * token del enlace ES la llave, y solo la tiene quien recibió el correo.
+ */
+export function getOffer({ params }) {
+  const vista = verOferta(params.token);
+  if (vista.estado === 'no-existe') throw new ApiError(404, 'Ese enlace no corresponde a ninguna oferta.');
+  return ok({ oferta: vista });
+}
+
+export async function acceptOffer({ params }) {
+  const salida = await aceptarOferta(params.token);
+
+  if (salida.estado === 'no-existe') throw new ApiError(404, 'Ese enlace no corresponde a ninguna oferta.');
+  if (salida.estado === 'vencida') {
+    throw new ApiError(410, 'Se venció el tiempo de esta mesa y se la ofrecimos a quien seguía.');
+  }
+  if (salida.estado === 'perdida') {
+    // El caso de los dos clics a la vez. No se pierde el puesto en la fila.
+    throw new ApiError(409, 'Se nos adelantaron por segundos y esa mesa ya quedó tomada. Usted sigue en la lista, en el mismo puesto.');
+  }
+  if (salida.estado !== 'aceptada') throw new ApiError(409, 'Esta oferta ya se cerró.');
+
+  const r = findByCode(salida.code);
+  return ok({
+    reservation: publicReservation(r),
+    repetida: Boolean(salida.repetida),
+    message: cobroDe(r).estado === 'pendiente'
+      ? 'La mesa es suya. Queda en firme apenas recibamos el pago.'
+      : 'La mesa es suya. Lo esperamos.'
+  });
+}
+
+export async function declineOffer({ params }) {
+  await rechazarOferta(params.token);
+  return ok({ message: 'Listo, se la ofrecemos a quien sigue. Gracias por avisar.' });
 }
 
 export { ApiError };

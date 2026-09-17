@@ -72,6 +72,9 @@ route('GET', '/api/floor', api.getFloor);
 
 route('POST', '/api/reservations', api.createReservation);
 route('POST', '/api/waitlist', api.joinWaitlist);
+route('GET', '/api/espera/:token', api.getOffer);
+route('POST', '/api/espera/:token/aceptar', api.acceptOffer);
+route('POST', '/api/espera/:token/rechazar', api.declineOffer);
 route('GET', '/api/payments/:code', api.getPayment);
 route('POST', '/api/payments/:code', api.payReservation);
 route('GET', '/api/reservations/lookup', api.lookupReservation);
@@ -85,6 +88,7 @@ route('GET', '/api/admin/stats', api.adminStats, { admin: true });
 route('GET', '/api/admin/export.csv', api.adminExport, { admin: true });
 route('GET', '/api/admin/waitlist', api.adminWaitlist, { admin: true });
 route('PATCH', '/api/admin/waitlist/:id', api.adminWaitlist, { admin: true });
+route('POST', '/api/admin/waitlist/:id/ofrecer', api.adminOfferNow, { admin: true });
 route('POST', '/api/admin/reservations', (ctx) => api.createReservation({ ...ctx, admin: true }), { admin: true });
 route('PATCH', '/api/admin/reservations/:id', api.adminUpdateReservation, { admin: true });
 route('PATCH', '/api/admin/payments/:id', api.adminMarkPayment, { admin: true });
@@ -149,6 +153,7 @@ async function serveStatic(req, res, pathname) {
   let rel = pathname === '/' ? 'index.html' : pathname.slice(1);
   if (rel === 'admin' || rel === 'admin/') rel = 'admin.html';
   if (rel === 'reserva' || rel === 'mi-reserva') rel = 'index.html';
+  if (rel === 'espera' || rel === 'espera/') rel = 'espera.html';
 
   const target = path.join(PUBLIC_DIR, rel);
   if (!target.startsWith(PUBLIC_DIR)) return send(res, 403, { error: 'Ruta no permitida.' });

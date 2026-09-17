@@ -406,8 +406,10 @@ const TOOLS = [
     name: 'anotar_lista_espera',
     title: 'Anotar en lista de espera',
     description:
-      'Cuando un día está lleno o el grupo pasa de 12, deja los datos para que la casa llame. ' +
-      'No reserva mesa.',
+      'Cuando un día está lleno o el grupo pasa de 12, deja los datos en la lista de espera. ' +
+      'No reserva mesa, pero si ese día se suelta una que le sirva, al huésped le llega un correo ' +
+      'con un botón para tomarla antes que nadie. Sin salón queda como «cualquiera», que es lo que ' +
+      'más opciones le da.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -417,6 +419,7 @@ const TOOLS = [
         personas: { type: 'integer', minimum: 1, maximum: 120 },
         fecha: S.fecha,
         franja: { type: 'string', enum: ['almuerzo', 'cena', 'cualquiera'] },
+        salon: { type: 'string', enum: ['terraza', 'salon', 'patio', 'barra', 'privado'] },
         notas: { type: 'string' }
       },
       required: ['nombre', 'telefono', 'correo', 'personas', 'fecha']
@@ -432,6 +435,7 @@ const TOOLS = [
           party: grande ? 12 : args.personas,
           date: args.fecha,
           window: args.franja || 'cualquiera',
+          zone: args.salon || null,
           notes: grande ? `Grupo de ${args.personas}. ${args.notas || ''}`.trim() : args.notas || ''
         }
       });

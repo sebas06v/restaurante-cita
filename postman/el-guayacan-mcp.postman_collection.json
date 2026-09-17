@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "6756a23f-7394-48b1-be83-0068e0a6ba0c",
+    "_postman_id": "899b9294-bcd7-4c94-add3-d8983fd0eff1",
     "name": "El Guayacán · MCP",
     "description": "# El Guayacán · servidor MCP\n\nEl MCP del restaurante hablando por HTTP, para poder verlo y probarlo desde Postman.\n\n## Antes de empezar\n\n1. `npm start` en el proyecto. El restaurante queda en `http://127.0.0.1:4321`.\n2. Importe también el environment `el-guayacan.postman_environment.json`, o deje las variables\n   de la colección como están.\n3. Corra la carpeta **0 · Protocolo** de arriba abajo, y después **1 · Consultar**.\n\n## Cómo funciona\n\nTodo va a un solo endpoint, `POST {{baseUrl}}/mcp`, con un mensaje JSON-RPC 2.0 en el cuerpo:\n\n```json\n{ \"jsonrpc\": \"2.0\", \"id\": 1, \"method\": \"tools/call\",\n  \"params\": { \"name\": \"consultar_disponibilidad\", \"arguments\": { \"personas\": 4 } } }\n```\n\nEl `id` lo inyecta la colección (variable `rpcId`, sube sola en cada petición). El mismo catálogo\nse sirve por stdio en `mcp/server.js`, que es como lo levanta Claude Code: este endpoint HTTP\nexiste para depurar y para verlo aquí.\n\n## Variables que se llenan solas\n\n| Variable | Quién la escribe |\n| --- | --- |\n| `fecha`, `hora` | el test de `proximas_fechas_libres` (y un valor por defecto en el pre-request) |\n| `codigo` | el test de `crear_reserva` |\n| `codigoRest` | el test de `POST /api/reservations` |\n| `hoy` | el test de `GET /api/config` |\n| `rpcId` | el pre-request de la colección |\n\n## Ojo\n\nLas peticiones de la carpeta 2 y 3 **escriben en la agenda de verdad** (`data/db.json`).\nPara volver a empezar limpio: `npm run reset`.\n\nGenerada por `npm run postman` desde el catálogo real del MCP: 13 herramientas, 3 recursos, 3 prompts, 8 métodos.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
@@ -1090,7 +1090,7 @@
                 "mcp"
               ]
             },
-            "description": "Cuando un día está lleno o el grupo pasa de 12, deja los datos para que la casa llame. No reserva mesa.\n\nEscribe en la agenda.\n\nLa salida para grupos de más de 12 y para días llenos. No reserva mesa."
+            "description": "Cuando un día está lleno o el grupo pasa de 12, deja los datos en la lista de espera. No reserva mesa, pero si ese día se suelta una que le sirva, al huésped le llega un correo con un botón para tomarla antes que nadie. Sin salón queda como «cualquiera», que es lo que más opciones le da.\n\nEscribe en la agenda.\n\nLa salida para grupos de más de 12 y para días llenos. No reserva mesa."
           },
           "response": []
         },

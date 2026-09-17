@@ -23,6 +23,7 @@
 import { render } from '../mail/plantillas.js';
 import { enviar, MODO as MODO_CORREO } from '../mail/transporte.js';
 import { db, logEvent } from '../db.js';
+import { ESPERA } from '../config.js';
 import { todayISO } from '../time.js';
 
 const NOMBRE = 'correos-guayacan';
@@ -49,7 +50,13 @@ let arrancada = false;
  * Lo que hace un trabajo. Es la misma función en los dos modos, así que
  * cambiar de cola no cambia el comportamiento.
  */
-async function procesar({ tipo, code }) {
+async function procesar(datos) {
+  const { tipo, code } = datos;
+
+  // Los trabajos de la lista de espera no cuelgan de una reserva. Se cargan
+  // con import() para no amarrar este archivo con espera.js en un ciclo.
+  if (TRABAJOS_ESPERA.has(tipo)) return procesarEspera(datos);
+
   const reservation = db().reservations.find((r) => r.code === code);
   if (!reservation) {
     // La reserva ya no existe: no es un fallo, no hay nada que mandar.
@@ -68,12 +75,48 @@ async function procesar({ tipo, code }) {
   return salida;
 }
 
+/* ═════════════════════════════════════════════ trabajos de lista de espera */
+
+const TRABAJOS_ESPERA = new Set(['oferta', 'oferta-cerrada', 'vencer-oferta', 'vencer-pago']);
+
+async function procesarEspera({ tipo, entryId, offerId, code }) {
+  const espera = await import('../espera.js');
+
+  // Estos dos no mandan correo: mueven el estado y encolan lo que siga.
+  if (tipo === 'vencer-oferta') return espera.vencerOferta({ entryId, offerId });
+  if (tipo === 'vencer-pago') return espera.vencerPago({ code });
+
+  const entry = db().waitlist.find((e) => e.id === entryId);
+  if (!entry || !entry.offer || entry.offer.id !== offerId) {
+    // La oferta se resolvió por otro lado: mandar el correo ahora sería
+    // contarle al huésped algo que ya no es cierto.
+    return { saltado: 'la oferta ya no está vigente' };
+  }
+
+  const { renderEspera } = await import('../mail/plantillas.js');
+  const correo = renderEspera(tipo, entry);
+  const salida = await enviar(correo);
+
+  logEvent({ action: 'correo-enviado', tipo, code: entry.offer.id, via: salida.via });
+  return salida;
+}
+
 /* ═══════════════════════════════════════════════ cola de respaldo, sin Redis */
 
 /**
  * Misma interfaz que BullMQ, en memoria. Reintenta con el mismo backoff,
  * pero lo pendiente se pierde al reiniciar: es un respaldo, no un sustituto.
  */
+// setTimeout guarda el retraso en 32 bits: pasado ese tope se desborda y
+// dispara de inmediato. Un recordatorio a 26 días salía al instante.
+const TOPE_TIMEOUT = 2 ** 31 - 1;
+
+/** Espera larga, en tramos que sí caben. */
+function esperarLargo(ms, hacer) {
+  if (ms <= TOPE_TIMEOUT) return setTimeout(hacer, ms).unref?.();
+  return setTimeout(() => esperarLargo(ms - TOPE_TIMEOUT, hacer), TOPE_TIMEOUT).unref?.();
+}
+
 const memoria = {
   pendientes: new Map(),
   hechos: 0,
@@ -100,8 +143,7 @@ const memoria = {
 
     const retraso = opts.delay || 0;
     this.pendientes.set(id, { datos, at: Date.now() + retraso });
-    const t = setTimeout(() => correr(), retraso);
-    t.unref?.();
+    esperarLargo(retraso, () => correr());
     return { id };
   },
 
@@ -159,15 +201,18 @@ export async function cerrarCola() {
 
 /* ═══════════════════════════════════════════════════════ encolar trabajos */
 
-async function encolar(tipo, code, opts = {}) {
-  const datos = { tipo, code };
+async function encolarDatos(datos, opts = {}) {
   try {
-    if (cola) return await cola.add(tipo, datos, opts);
-    return await memoria.add(tipo, datos, opts);
+    if (cola) return await cola.add(datos.tipo, datos, opts);
+    return await memoria.add(datos.tipo, datos, opts);
   } catch (err) {
-    console.error(`[correos] no pude encolar ${tipo} de ${code}: ${err.message}`);
+    console.error(`[correos] no pude encolar ${datos.tipo}: ${err.message}`);
     return null;
   }
+}
+
+export async function encolar(tipo, code, opts = {}) {
+  return encolarDatos({ tipo, code }, opts);
 }
 
 /** Confirmación al crear la reserva, y el recordatorio del día anterior. */
@@ -183,6 +228,41 @@ export async function alPagar(reservation) {
 
 export async function alCancelar(reservation) {
   await encolar('cancelacion', reservation.code);
+}
+
+/* ────────────────────────────────────────────────── lista de espera ── */
+
+/** El correo de oferta, o el de cierre. */
+export async function encolarOferta({ tipo, entryId, offerId, motivo }) {
+  return encolarDatos({ tipo, entryId, offerId, motivo });
+}
+
+/**
+ * El tiempo límite de la oferta. Es la razón de fondo para tener Redis: un
+ * setTimeout se muere con el proceso, y aquí hay una mesa de por medio.
+ */
+export async function programarVencimientoOferta({ entryId, offerId, delay }) {
+  if (delay <= 0) return null;
+  return encolarDatos(
+    { tipo: 'vencer-oferta', entryId, offerId },
+    { delay, jobId: `vencer-oferta:${offerId}`, attempts: 2 }
+  );
+}
+
+/** Suelta la mesa si el huésped no pagó dentro del plazo. */
+export async function programarVencimientoPago(reservation) {
+  const minutos = ESPERA.minutosParaPagar;
+  if (!minutos || reservation.status !== 'pendiente-pago') return null;
+
+  // Nunca más allá del servicio: después de esa hora, soltarla no sirve.
+  const servicio = new Date(`${reservation.date}T${reservation.time}:00`).getTime();
+  const delay = Math.min(minutos * 60 * 1000, servicio - Date.now());
+  if (delay <= 0) return null;
+
+  return encolarDatos(
+    { tipo: 'vencer-pago', code: reservation.code },
+    { delay, jobId: `vencer-pago:${reservation.code}`, attempts: 2 }
+  );
 }
 
 /**

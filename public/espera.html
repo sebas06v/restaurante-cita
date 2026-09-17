@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Se soltó una mesa · El Guayacán</title>
+    <meta name="robots" content="noindex" />
+    <meta name="theme-color" content="#0d0b08" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230d0b08'/%3E%3Cpath d='M8 22V10h3l5 8V10h3v12h-3l-5-8v8H8Z' fill='%23e0a63f'/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..600&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/css/tokens.css" />
+    <link rel="stylesheet" href="/assets/css/site.css" />
+
+    <style>
+      /* La página vive sola: es a donde cae alguien desde un correo, sin
+         haber pasado por el sitio. Todo lo que importa cabe en una pantalla. */
+      .oferta-wrap {
+        min-height: 100dvh;
+        display: grid;
+        place-items: center;
+        padding: 28px 16px;
+      }
+      .oferta {
+        width: 100%;
+        max-width: 520px;
+        background: var(--ink-700);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        overflow: hidden;
+      }
+      .oferta-top {
+        padding: 22px 26px;
+        border-bottom: 1px solid var(--line);
+        background: var(--ink-800);
+      }
+      .oferta-marca {
+        font-family: 'Instrument Sans', system-ui, sans-serif;
+        font-size: 11px;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        color: var(--gold-500);
+      }
+      .oferta-body { padding: 26px; }
+      .oferta-body h1 {
+        font-family: Fraunces, Georgia, serif;
+        font-size: 28px;
+        line-height: 1.15;
+        margin: 0 0 10px;
+        color: var(--paper);
+        font-weight: 500;
+      }
+      .oferta-body p { margin: 0 0 18px; color: var(--paper-3); line-height: 1.6; }
+      .oferta-datos { width: 100%; border-collapse: collapse; margin: 0 0 20px; }
+      .oferta-datos td {
+        padding: 11px 0;
+        border-top: 1px solid var(--line);
+        font-size: 14px;
+      }
+      .oferta-datos td:first-child { color: var(--muted); width: 42%; }
+      .oferta-datos td:last-child { color: var(--paper); font-weight: 600; text-align: right; }
+
+      /* La cuenta regresiva no es un adorno: es la única razón por la que
+         esta página tiene urgencia. */
+      .reloj {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        padding: 14px 16px;
+        border-radius: 10px;
+        background: color-mix(in oklab, var(--warn) 12%, transparent);
+        border: 1px solid color-mix(in oklab, var(--warn) 30%, transparent);
+        margin: 0 0 20px;
+      }
+      .reloj b {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 22px;
+        color: var(--maiz);
+        font-variant-numeric: tabular-nums;
+      }
+      .reloj span { font-size: 13px; color: var(--paper-3); }
+      .reloj.is-poco {
+        background: color-mix(in oklab, var(--danger) 14%, transparent);
+        border-color: color-mix(in oklab, var(--danger) 36%, transparent);
+      }
+      .reloj.is-poco b { color: var(--terra-400); }
+
+      .oferta-acciones { display: grid; gap: 10px; }
+      .oferta-pie {
+        padding: 16px 26px;
+        border-top: 1px solid var(--line);
+        background: var(--ink-800);
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--muted);
+      }
+      .oferta-pie a { color: var(--gold-400); }
+      .estado-icono { font-size: 34px; line-height: 1; margin-bottom: 12px; }
+    </style>
+  </head>
+
+  <body>
+    <div class="grain" aria-hidden="true"></div>
+
+    <main class="oferta-wrap">
+      <section class="oferta" id="oferta" aria-live="polite">
+        <div class="oferta-top">
+          <div class="oferta-marca">El Guayacán</div>
+        </div>
+        <div class="oferta-body" id="cuerpo">
+          <p class="muted">Buscando su mesa…</p>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="/assets/js/espera.js"></script>
+  </body>
+</html>

@@ -169,8 +169,10 @@ const TOOLS = [
   {
     name: 'anotar_lista_espera',
     description:
-      'Deja los datos del huésped para que la casa lo llame: cuando el día está lleno o el grupo pasa de ' +
-      `${RESTAURANT.maxPartyOnline} personas. No reserva mesa.`,
+      'Anota al huésped en la lista de espera: cuando el día está lleno o el grupo pasa de ' +
+      `${RESTAURANT.maxPartyOnline} personas. No reserva mesa, pero si ese día se suelta una que le ` +
+      'sirva, le llega un correo con un botón para tomarla antes que nadie. Si no le importa el salón, ' +
+      'no mande salon: así le sale algo más rápido.',
     input_schema: {
       type: 'object',
       properties: {
@@ -180,6 +182,7 @@ const TOOLS = [
         personas: { type: 'integer', minimum: 1, maximum: 200 },
         fecha: { type: 'string' },
         franja: { type: 'string', enum: ['almuerzo', 'cena', 'cualquiera'] },
+        salon: { type: 'string', enum: ['terraza', 'salon', 'patio', 'barra', 'privado'] },
         notas: { type: 'string' }
       },
       required: ['nombre', 'telefono', 'correo', 'personas', 'fecha'],
@@ -404,6 +407,7 @@ async function runTool(name, input) {
           party: grande ? RESTAURANT.maxPartyOnline : input.personas,
           date: input.fecha,
           window: input.franja || 'cualquiera',
+          zone: input.salon || null,
           notes: grande ? `Grupo de ${input.personas}. ${input.notas || ''}`.trim() : input.notas || ''
         }
       });
@@ -473,7 +477,7 @@ Español colombiano, cálido y directo, de usted. Nunca asumas el género del hu
 2. Antes de crear_reserva, resume en una frase (fecha, hora, personas, salón y nombre) y espera un sí explícito.
 3. Pide los datos de una vez, no de a uno: nombre y apellido, celular y correo.
 4. Para cancelar, pide confirmación clara. No canceles por una duda ni por un "creo que".
-5. Si el día está lleno, ofrece otras horas del mismo día o el día siguiente antes de rendirte; como último recurso, anotar_lista_espera.
+5. Si el día está lleno, ofrece otras horas del mismo día o el día siguiente antes de rendirte; como último recurso, anotar_lista_espera. Al anotarlo, dile la verdad: no es una lista muerta, si alguien cancela le llega un correo y tiene un rato corto para tomar la mesa.
 6. Grupos de más de ${RESTAURANT.maxPartyOnline}: no se reservan en línea. Usa anotar_lista_espera y avisa que la casa llama para armar el evento.
 7. Desde ${RESTAURANT.depositFrom} personas la reserva queda por confirmar mientras la casa llama por la garantía. Dilo al confirmar.
 8. Nunca inventes platos, precios, políticas ni números de mesa. Si no lo sabes, consúltalo con una herramienta o dilo.

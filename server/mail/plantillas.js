@@ -22,6 +22,10 @@ const LINEA = '#e4dccb';
 const money = (n) => `$ ${Math.round(n || 0).toLocaleString('es-CO')}`;
 const people = (n) => `${n} ${n === 1 ? 'persona' : 'personas'}`;
 const zoneName = (id) => (ZONES.find((z) => z.id === id) || {}).name || 'Salón por asignar';
+const hhmmDe = (iso) => {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
 const occasionLabel = (id) => (OCCASIONS.find((o) => o.id === id) || {}).label || id;
 
 /** El sitio, para los enlaces. En Render se fija con PUBLIC_URL. */
@@ -178,7 +182,11 @@ export const PLANTILLAS = {
         titulo,
         entradilla,
         filas,
-        boton: { href: `${sitio()}/api/reservations/${r.code}/ics`, texto: 'Agregar al calendario' },
+        // Si falta pagar, el botón lleva a pagar. Mandar al calendario una
+        // mesa que todavía no está en firme es mandarlo al lugar equivocado.
+        boton: pendiente
+          ? { href: `${sitio()}/?pagar=${r.code}`, texto: `Pagar ${money(r.pago.monto)}` }
+          : { href: `${sitio()}/api/reservations/${r.code}/ics`, texto: 'Agregar al calendario' },
         pie: 'Este correo sirve como comprobante de su reserva.'
       }),
       texto: plano(titulo, entradilla, filas)
@@ -221,6 +229,80 @@ export const PLANTILLAS = {
       }),
       texto: plano(titulo, entradilla, filas)
     };
+  },
+
+  /**
+   * Se soltó una mesa y le toca a esta persona de la lista de espera.
+   * Lleva la hora límite en letra grande: una oferta sin fecha de
+   * vencimiento visible es una trampa.
+   */
+  oferta(entry) {
+    const o = entry.offer;
+    const nombre = entry.name.split(' ')[0];
+    const limite = prettyTime(hhmmDe(o.venceAt));
+    const paga = o.monto > 0;
+
+    const filas = [
+      ['A nombre de', entry.name],
+      ['Cuándo', `${prettyDate(o.date, true)}, ${prettyTime(o.time)}`],
+      ['Personas', people(entry.party)],
+      ['Dónde', zoneName(o.zone)],
+      paga ? ['Para dejarla en firme', money(o.monto)] : null,
+      ['Tiene hasta', `<span style="color:#a23b1e">${limite}</span>`]
+    ];
+
+    const titulo = 'Se soltó una mesa';
+    const entradilla = `${nombre}, se desocupó una mesa el ${prettyDate(o.date)} a las ${prettyTime(
+      o.time
+    )} y usted es el primero de la lista. Si la quiere, tómela antes de las ${limite}; después se la ofrecemos a quien sigue.`;
+
+    const cuerpo = paga
+      ? `<p style="margin:20px 0 0;font-size:14px;line-height:1.6;color:#6f6757">
+           La mesa queda en firme cuando reciba el pago de ${money(o.monto)}, que se abona a su consumo.
+           Si no alcanza a pagar dentro de ese mismo tiempo, la mesa vuelve a la lista.
+         </p>`
+      : '';
+
+    return {
+      asunto: `Se soltó una mesa · ${prettyDate(o.date)} ${prettyTime(o.time)}`,
+      html: envoltura({
+        titulo,
+        entradilla,
+        filas,
+        cuerpo,
+        boton: { href: `${sitio()}/espera?t=${o.token}`, texto: 'Quiero esa mesa' },
+        pie: 'Este correo es solo para usted. Nadie más tiene esta mesa apartada mientras tanto, así que conviene no dejarlo para después.'
+      }),
+      texto: plano(titulo, entradilla, filas, `Tomar la mesa: ${sitio()}/espera?t=${o.token}`)
+    };
+  },
+
+  /** Se le venció, la rechazó, o alguien se le adelantó. */
+  'oferta-cerrada'(entry) {
+    const o = entry.offer;
+    const nombre = entry.name.split(' ')[0];
+    const filas = [
+      ['Era para', `${prettyDate(o.date, true)}, ${prettyTime(o.time)}`],
+      ['Personas', people(entry.party)]
+    ];
+
+    const titulo = 'No alcanzamos esta vez';
+    const entradilla =
+      o.resultado === 'perdida'
+        ? `${nombre}, se nos adelantaron por segundos y esa mesa ya quedó tomada. Usted sigue en la lista, en el mismo puesto, y le escribimos si se suelta otra.`
+        : `${nombre}, se venció el tiempo de la mesa que le ofrecimos y se la pasamos a quien seguía. Si todavía quiere venir ese día, reserve directo o vuelva a anotarse.`;
+
+    return {
+      asunto: `No alcanzamos la mesa del ${prettyDate(o.date)}`,
+      html: envoltura({
+        titulo,
+        entradilla,
+        filas,
+        boton: { href: `${sitio()}/#reservar`, texto: 'Ver otros horarios' },
+        pie: `Si quiere que le busquemos algo a la medida, escríbanos al ${RESTAURANT.whatsapp}.`
+      }),
+      texto: plano(titulo, entradilla, filas, `Otros horarios: ${sitio()}/#reservar`)
+    };
   }
 };
 
@@ -231,4 +313,14 @@ export function render(tipo, reservation) {
   const plantilla = PLANTILLAS[tipo];
   if (!plantilla) throw new Error(`No existe la plantilla "${tipo}".`);
   return { ...plantilla(reservation), tipo, para: reservation.email, code: reservation.code };
+}
+
+/**
+ * Los correos de la lista de espera no cuelgan de una reserva —todavía no
+ * existe—, sino del registro de la lista y su oferta.
+ */
+export function renderEspera(tipo, entry) {
+  const plantilla = PLANTILLAS[tipo];
+  if (!plantilla) throw new Error(`No existe la plantilla "${tipo}".`);
+  return { ...plantilla(entry), tipo, para: entry.email, code: entry.offer ? entry.offer.id : entry.id };
 }

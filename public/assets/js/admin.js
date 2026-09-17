@@ -776,6 +776,12 @@ async function loadStats() {
 
 /* ------------------------------------------------------------ lista espera */
 
+/** HH:MM local de un instante ISO, para pasarlo por prettyTime. */
+const horaDe = (iso) => {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+
 async function loadWaitlist() {
   let data;
   try {
@@ -785,35 +791,100 @@ async function loadWaitlist() {
     return;
   }
 
+  const { resumen } = data;
+
+  // Que se vea de una si el automático está prendido y cuánto tiempo le da
+  // a la gente: es lo primero que pregunta quien abre esta pestaña.
+  $('#esperaModo').innerHTML = resumen.activa
+    ? `Cuando se suelta una mesa, el sistema le ofrece <b>a una sola persona</b> por correo:
+       ${resumen.ventanaLargaMin} min si falta más de un día, ${resumen.ventanaCortaMin} min si es para ya.`
+    : '<b style="color:var(--warn)">Ofertas automáticas apagadas.</b> Aquí solo se anota; hay que llamar a mano.';
+
+  fill(
+    $('#esperaCounts'),
+    `<div class="kpi"><b>${resumen.esperando}</b><span>esperando</span></div>
+     <div class="kpi"><b>${resumen.ofrecidas}</b><span>ofrecidas</span></div>
+     <div class="kpi"><b>${resumen.aceptadas}</b><span>aceptaron</span></div>
+     <div class="kpi"><b>${resumen.vencidas}</b><span>se vencieron</span></div>`
+  );
+
   const host = $('#waitlist');
   if (!data.waitlist.length) {
     fill(host, '<div class="empty">Nadie en lista de espera.</div>');
     return;
   }
 
+  const BADGE = {
+    esperando: 'badge-warn',
+    ofrecida: 'badge-info',
+    aceptada: 'badge-ok',
+    vencida: 'badge-danger',
+    cerrado: ''
+  };
+  const ETIQUETA = Object.fromEntries((data.estados || []).map((e) => [e.id, e.label]));
+
   fill(
     host,
     data.waitlist
-      .map(
-        (w) => `<div class="res">
+      .map((w) => {
+        const o = w.offer;
+        // Una oferta viva es lo único urgente de esta lista: se dice cuándo
+        // se vence, no solo que existe.
+        const detalleOferta =
+          w.status === 'ofrecida' && o
+            ? `<span class="res-meta">Se le ofreció ${prettyTime(o.time)} · mesa ${esc(o.tableId)} ·
+                 vence ${prettyTime(horaDe(o.venceAt))}</span>`
+            : w.status === 'aceptada' && o
+              ? `<span class="res-meta">Aceptó · <span class="mono">${esc(o.reservationCode || '')}</span></span>`
+              : '';
+
+        const acciones =
+          w.status === 'esperando'
+            ? `<input class="input input-sm" type="time" step="1800" value="${esc(w.sugerida || '19:30')}"
+                 data-hora="${esc(w.id)}" aria-label="Hora para ofrecer" style="width:7.2rem" />
+               <button class="btn btn-sm" type="button" data-ofrecer="${esc(w.id)}">Ofrecer</button>
+               <button class="btn btn-sm btn-ghost" type="button" data-wait="${esc(w.id)}" data-to="cerrado">Cerrar</button>`
+            : w.status === 'ofrecida'
+              ? '<span class="muted">Esperando respuesta…</span>'
+              : w.status === 'aceptada'
+                ? ''
+                : `<button class="btn btn-sm btn-ghost" type="button" data-wait="${esc(w.id)}" data-to="esperando">Volver a la lista</button>`;
+
+        return `<div class="res">
           <span class="res-time">${esc(w.date.slice(5))}</span>
           <span>
             <span class="res-name">${esc(w.name)}</span>
-            <span class="res-meta">${plural(w.party, 'persona', 'personas')} · ${esc(w.window)} · ${esc(
-              w.phone
-            )} · ${esc(w.email)}${w.notes ? ` · ${esc(w.notes)}` : ''}</span>
+            <span class="res-meta">${plural(w.party, 'persona', 'personas')} · ${esc(w.window)}${
+              w.zone ? ` · ${esc(w.zone)}` : ''
+            } · ${esc(w.phone)} · ${esc(w.email)}${w.notes ? ` · ${esc(w.notes)}` : ''}</span>
+            ${detalleOferta}
           </span>
-          <span class="res-tags">
-            <button class="btn btn-sm" type="button" data-wait="${w.id}" data-to="avisado">Avisado</button>
-            <button class="btn btn-sm btn-ghost" type="button" data-wait="${w.id}" data-to="cerrado">Cerrar</button>
-          </span>
-          <span class="badge ${w.status === 'esperando' ? 'badge-warn' : 'badge-ok'}">${esc(w.status)}</span>
-        </div>`
-      )
+          <span class="res-tags">${acciones}</span>
+          <span class="badge ${BADGE[w.status] || ''}">${esc(ETIQUETA[w.status] || w.status)}</span>
+        </div>`;
+      })
       .join('')
   );
 
   host.onclick = async (e) => {
+    const ofrecer = e.target.closest('[data-ofrecer]');
+    if (ofrecer) {
+      const id = ofrecer.dataset.ofrecer;
+      const hora = $(`[data-hora="${id}"]`, host);
+      try {
+        const res = await api(`/api/admin/waitlist/${id}/ofrecer`, {
+          method: 'POST',
+          body: { time: (hora?.value || '').slice(0, 5) },
+          admin: true
+        });
+        toast(res.message, 'ok');
+        loadWaitlist();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+      return;
+    }
+
     const btn = e.target.closest('[data-wait]');
     if (!btn) return;
     try {
@@ -828,7 +899,6 @@ async function loadWaitlist() {
     }
   };
 }
-
 
 /* ═══════════════════════════════════════════════════════ cola de correos */
 
