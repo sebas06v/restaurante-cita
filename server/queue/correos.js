@@ -25,6 +25,7 @@ import { enviar, MODO as MODO_CORREO } from '../mail/transporte.js';
 import { db, logEvent } from '../db.js';
 import { ESPERA } from '../config.js';
 import { todayISO } from '../time.js';
+import { registrar } from '../log.js';
 
 const NOMBRE = 'correos-guayacan';
 const REDIS_URL = process.env.REDIS_URL || '';
@@ -67,6 +68,37 @@ let arrancada = false;
  * cambiar de cola no cambia el comportamiento.
  */
 async function procesar(datos) {
+  const arranque = Date.now();
+  try {
+    const salida = await correrTrabajo(datos);
+    registrar({
+      // Un trabajo que se salta no es un fallo, pero sí algo que uno quiere
+      // ver cuando se pregunta «¿por qué no llegó ese correo?».
+      nivel: salida?.saltado ? 'WARN' : 'INFO',
+      actor: 'sistema/cola',
+      fn: `cola.${datos.tipo}`,
+      msg: salida?.saltado ? `saltado: ${salida.saltado}` : `salió por ${salida?.via || '—'}`,
+      entrada: datos,
+      salida,
+      ms: Date.now() - arranque
+    });
+    return salida;
+  } catch (err) {
+    registrar({
+      nivel: 'ERROR',
+      actor: 'sistema/cola',
+      fn: `cola.${datos.tipo}`,
+      msg: err.message,
+      entrada: datos,
+      salida: { permanente: Boolean(err.permanente), status: err.status },
+      ms: Date.now() - arranque
+    });
+    throw err; // que la cola siga decidiendo si reintenta
+  }
+}
+
+/** El trabajo en sí. procesar() lo envuelve para dejar constancia. */
+async function correrTrabajo(datos) {
   const { tipo, code } = datos;
 
   // Los trabajos de la lista de espera no cuelgan de una reserva. Se cargan
@@ -261,7 +293,14 @@ async function encolarDatos(datos, opts = {}) {
   } catch (err) {
     // Se traga el error a propósito —una reserva no se cae porque el correo
     // no salga— pero tiene que quedar dicho, no desaparecer.
-    console.error(`[correos] NO se encoló ${datos.tipo}${datos.code ? ` de ${datos.code}` : ''}: ${err.message}`);
+    registrar({
+      nivel: 'ERROR',
+      actor: 'sistema/cola',
+      fn: 'encolarDatos',
+      msg: `no se encoló: ${err.message}`,
+      entrada: { datos, opts },
+      salida: null
+    });
     return null;
   }
 }

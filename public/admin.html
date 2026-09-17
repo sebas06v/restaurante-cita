@@ -62,6 +62,7 @@
           <button class="chip" type="button" data-tab="analitica">Analítica</button>
           <button class="chip" type="button" data-tab="espera">Lista de espera</button>
           <button class="chip" type="button" data-tab="correos">Correos</button>
+          <button class="chip" type="button" data-tab="bitacora">Bitácora</button>
         </nav>
 
         <div class="adminbar-right">
@@ -217,6 +218,28 @@
                 <div id="mailFailed" class="res-list"></div>
               </div>
             </aside>
+          </div>
+        </section>
+        <!-- ═══════════════════════════════════════════════════════ bitácora -->
+        <section class="tab" data-tab-panel="bitacora" hidden>
+          <div class="day-head">
+            <div>
+              <h2>Bitácora</h2>
+              <p class="muted" id="logInfo">—</p>
+            </div>
+            <div class="filters">
+              <select class="select" id="logDia" aria-label="Día"></select>
+              <select class="select" id="logNivel" aria-label="Nivel">
+                <option value="">Todo</option>
+                <option value="ERROR">Solo errores</option>
+                <option value="WARN">Solo avisos</option>
+                <option value="INFO">Solo info</option>
+              </select>
+              <input class="input" id="logBuscar" type="search" placeholder="Buscar: GY-A3F9, correo, función…" />
+            </div>
+          </div>
+          <div class="card block-card">
+            <pre id="logLineas" class="bitacora"></pre>
           </div>
         </section>
       </main>

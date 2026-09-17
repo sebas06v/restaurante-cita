@@ -107,6 +107,8 @@ function firstServiceDay(from) {
 }
 
 function wireChrome() {
+  wireLogFilters();
+
   $('#dayInput').addEventListener('change', (e) => {
     state.date = e.target.value || state.config.today;
     loadDay();
@@ -132,6 +134,7 @@ function wireChrome() {
     if (state.tab === 'analitica') loadStats();
     if (state.tab === 'espera') loadWaitlist();
     if (state.tab === 'correos') loadMail();
+    if (state.tab === 'bitacora') loadLog();
   });
 
   $('#search').addEventListener(
@@ -993,4 +996,64 @@ async function loadMail() {
       toast(err.message, 'error');
     }
   };
+}
+
+
+/* ══════════════════════════════════════════════════════════════ bitácora */
+
+/** Los filtros recargan; la búsqueda con freno, para no pedir por cada tecla. */
+function wireLogFilters() {
+  $('#logDia').onchange = loadLog;
+  $('#logNivel').onchange = loadLog;
+  $('#logBuscar').oninput = debounce(loadLog, 350);
+}
+
+/**
+ * La bitácora del día. En Render el disco es efímero y no hay SSH, así que
+ * esta pestaña es la única forma de ver qué pasó mientras el proceso viva.
+ */
+async function loadLog() {
+  const dia = $('#logDia').value || '';
+  const params = new URLSearchParams();
+  if (dia) params.set('dia', dia);
+  if ($('#logNivel').value) params.set('nivel', $('#logNivel').value);
+  if ($('#logBuscar').value.trim()) params.set('buscar', $('#logBuscar').value.trim());
+
+  let data;
+  try {
+    data = await api(`/api/admin/logs?${params}`, { admin: true });
+  } catch (err) {
+    toast(err.message, 'error');
+    return;
+  }
+
+  // El selector de días se llena una vez; volver a pintarlo en cada
+  // búsqueda perdería lo que el usuario escogió.
+  const sel = $('#logDia');
+  if (sel.options.length !== data.dias.length) {
+    fill(sel, data.dias.map((d) => `<option value="${d}">${bonito(d)}</option>`).join(''));
+    sel.value = data.dia;
+  }
+
+  $('#logInfo').innerHTML = data.total
+    ? `${data.coinciden} de ${data.total} líneas · archivo <span class="mono">${esc(data.dia)}.log</span>`
+    : `Sin nada registrado ese día. Los archivos viven en <span class="mono">${esc(data.carpeta)}</span>.`;
+
+  fill(
+    $('#logLineas'),
+    data.lineas.length
+      ? data.lineas.map(pintarLinea).join(String.fromCharCode(10))
+      : '<span class="vacio">Nada que mostrar con ese filtro.</span>'
+  );
+}
+
+const bonito = (d) => `${d.slice(6, 8)}/${d.slice(4, 6)}/${d.slice(0, 4)}`;
+
+/** Colorea la hora, el nivel y la función; el resto va tal cual. */
+function pintarLinea(linea) {
+  const clase = linea.includes('] ERROR') ? 'l-error' : linea.includes('] WARN') ? 'l-warn' : 'l-info';
+  return esc(linea)
+    .replace(/^([[^]]+])/, '<span class="l-hora">$1</span>')
+    .replace(/(ERROR|WARN |INFO )/, `<span class="${clase}">$1</span>`)
+    .replace(/(fn=[^s]+)/, '<span class="l-fn">$1</span>');
 }

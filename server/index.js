@@ -18,6 +18,7 @@ import { ApiError } from './api.js';
 import { reply as chatReply, chatInfo } from './chat.js';
 import { iniciarCola, cerrarCola, colaInfo } from './queue/correos.js';
 import { transporteInfo } from './mail/transporte.js';
+import { registrar, cerrarLog, LOGS_DIR, diaDeHoy } from './log.js';
 import {
   dispatch as mcpDispatch,
   METHODS as MCP_METHODS,
@@ -92,6 +93,7 @@ route('POST', '/api/admin/waitlist/:id/ofrecer', api.adminOfferNow, { admin: tru
 route('POST', '/api/admin/reservations', (ctx) => api.createReservation({ ...ctx, admin: true }), { admin: true });
 route('PATCH', '/api/admin/reservations/:id', api.adminUpdateReservation, { admin: true });
 route('PATCH', '/api/admin/payments/:id', api.adminMarkPayment, { admin: true });
+route('GET', '/api/admin/logs', api.adminLogs, { admin: true });
 route('GET', '/api/admin/mail', api.adminMail, { admin: true });
 route('GET', '/api/admin/mail/:id', api.adminMailOne, { admin: true });
 route('POST', '/api/admin/mail/:id/retry', api.adminMailRetry, { admin: true });
@@ -116,6 +118,23 @@ function match(method, pathname) {
     if (hit) return { ...entry, params };
   }
   return null;
+}
+
+/* ------------------------------------------------------------------- quién */
+
+/**
+ * Quién hizo la petición, para la bitácora. No es autenticación: es saber a
+ * quién mirar cuando algo salió raro.
+ *
+ * El PIN nunca se escribe; solo si venía y era válido, que es lo que
+ * distingue al equipo de sala de un huésped cualquiera.
+ */
+function quienEs(req, pathname) {
+  const ip =
+    (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket?.remoteAddress || '—';
+  const conPin = Boolean(req.headers['x-admin-pin']);
+  const base = pathname.startsWith('/api/admin/') || conPin ? 'equipo' : pathname === '/mcp' ? 'mcp' : 'huésped';
+  return `${base}@${ip}`;
 }
 
 /* --------------------------------------------------------------- utilidades */
@@ -298,13 +317,31 @@ const server = http.createServer(async (req, res) => {
     return serveStatic(req, res, pathname);
   }
 
+  const actor = quienEs(req, pathname);
+
   const found = match(req.method, pathname);
-  if (!found) return send(res, 404, { error: 'Ese recurso no existe.' });
+  if (!found) {
+    registrar({
+      nivel: 'WARN',
+      actor,
+      fn: 'enrutador',
+      msg: 'ruta que no existe',
+      entrada: { metodo: req.method, ruta: pathname },
+      salida: { status: 404 }
+    });
+    return send(res, 404, { error: 'Ese recurso no existe.' });
+  }
+
+  // El nombre del handler es la función donde pasó todo lo que sigue.
+  const fn = found.handler.name || found.pattern;
+  const arranque = Date.now();
+  let query = {};
+  let body = {};
 
   try {
-    const query = Object.fromEntries(url.searchParams.entries());
+    query = Object.fromEntries(url.searchParams.entries());
     if (found.admin) api.requireAdmin(req.headers, query);
-    const body = await readBody(req);
+    body = await readBody(req);
     const result = await found.handler({
       query,
       body,
@@ -313,18 +350,74 @@ const server = http.createServer(async (req, res) => {
       headers: req.headers
     });
 
+    const status = result.status || 200;
+    registrar({
+      actor,
+      fn,
+      msg: `${req.method} ${pathname}`,
+      entrada: { params: found.params, query, body },
+      // Un archivo (CSV, ICS, HTML de un correo) no se vuelca al log: se
+      // dice qué era y cuánto pesaba.
+      salida:
+        result.body !== undefined
+          ? { status, archivo: result.headers?.['Content-Type'] || 'binario', bytes: result.body.length }
+          : { status, ...resumenDeSalida(result.json) },
+      ms: Date.now() - arranque
+    });
+
     if (result.body !== undefined) {
-      return send(res, result.status || 200, result.body, result.headers || {});
+      return send(res, status, result.body, result.headers || {});
     }
-    send(res, result.status || 200, result.json);
+    send(res, status, result.json);
   } catch (err) {
     if (err instanceof ApiError) {
+      // Un 4xx es el sistema diciendo que no, no un fallo: va como WARN.
+      registrar({
+        nivel: err.status >= 500 ? 'ERROR' : 'WARN',
+        actor,
+        fn,
+        msg: err.message,
+        entrada: { params: found.params, query, body },
+        salida: { status: err.status, ...err.extra },
+        ms: Date.now() - arranque
+      });
       return send(res, err.status, { error: err.message, ...err.extra });
     }
+
+    registrar({
+      nivel: 'ERROR',
+      actor,
+      fn,
+      msg: `${err.name}: ${err.message}`,
+      entrada: { params: found.params, query, body },
+      salida: { status: 500, stack: String(err.stack || '').split(String.fromCharCode(10)).slice(0, 4).join(' | ') },
+      ms: Date.now() - arranque
+    });
     console.error('[api]', err);
     send(res, 500, { error: 'Algo se rompió de nuestro lado.' });
   }
 });
+
+/**
+ * De la respuesta se guarda lo que sirve para investigar, no todo: una
+ * agenda de 265 reservas en una línea vuelve el archivo ilegible.
+ */
+function resumenDeSalida(json) {
+  if (!json || typeof json !== 'object') return {};
+  const salida = {};
+  for (const [k, v] of Object.entries(json)) {
+    if (Array.isArray(v)) salida[k] = `«${v.length} elementos»`;
+    else if (v && typeof v === 'object') {
+      // De los objetos grandes, lo que identifica: código o id. El código
+      // de una reserva no es secreto —va impreso en el correo— y es
+      // justamente por lo que uno busca en el log. El token NO va: ese sí
+      // es una llave.
+      const ref = v.code || v.id;
+      salida[k] = ref ? { ref, estado: v.status || v.estado } : '«objeto»';
+    } else salida[k] = v;
+  }
+  return salida;
+}
 
 load();
 
@@ -334,10 +427,27 @@ await iniciarCola();
 
 for (const senal of ['SIGINT', 'SIGTERM']) {
   process.on(senal, async () => {
+    registrar({ actor: 'sistema', fn: 'apagado', msg: `llegó ${senal}` });
     await cerrarCola();
+    await cerrarLog();
     process.exit(0);
   });
 }
+
+// Lo que se rompe fuera de una petición no tiene quien lo cuente: sin esto,
+// desaparece.
+process.on('unhandledRejection', (razon) => {
+  registrar({
+    nivel: 'ERROR',
+    actor: 'sistema',
+    fn: 'promesa sin atrapar',
+    msg: razon instanceof Error ? `${razon.name}: ${razon.message}` : String(razon)
+  });
+});
+process.on('uncaughtException', (err) => {
+  registrar({ nivel: 'ERROR', actor: 'sistema', fn: 'excepción sin atrapar', msg: `${err.name}: ${err.message}` });
+  console.error(err);
+});
 
 server.listen(PORT, HOST, () => {
   const url = `http://${HOST}:${PORT}`;
@@ -375,5 +485,14 @@ server.listen(PORT, HOST, () => {
           : 'en memoria · sin REDIS_URL'
     } · envío: ${correo.modo}`
   );
+  console.log(`  Bitácora        ${path.relative(process.cwd(), LOGS_DIR)}${path.sep}${diaDeHoy()}.log`);
   console.log('');
+
+  registrar({
+    actor: 'sistema',
+    fn: 'arranque',
+    msg: 'servidor arriba',
+    entrada: { host: HOST, puerto: PORT, desplegado: deployed },
+    salida: { cola: colaInfo().modo, correo: transporteInfo().modo, chat: chatInfo().enabled }
+  });
 });

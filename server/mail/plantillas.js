@@ -182,12 +182,10 @@ export const PLANTILLAS = {
         titulo,
         entradilla,
         filas,
-        // Si falta pagar, el botón lleva a pagar. Mandar al calendario una
-        // mesa que todavía no está en firme es mandarlo al lugar equivocado.
-        boton: pendiente
-          ? { href: `${sitio()}/?pagar=${r.code}`, texto: `Pagar ${money(r.pago.monto)}` }
-          : { href: `${sitio()}/api/reservations/${r.code}/ics`, texto: 'Agregar al calendario' },
-        pie: 'Este correo sirve como comprobante de su reserva.'
+        // Aquí el pago ya entró: la mesa está en firme y lo que sigue es
+        // meterla en el calendario.
+        boton: { href: `${sitio()}/api/reservations/${r.code}/ics`, texto: 'Agregar al calendario' },
+        pie: 'Este correo sirve como comprobante de su pago y de su reserva.'
       }),
       texto: plano(titulo, entradilla, filas)
     };

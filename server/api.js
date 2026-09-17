@@ -48,6 +48,7 @@ import { reservationIcs } from './ics.js';
 import { alReservar, alPagar, alCancelar, estadoCola, reintentar, programarVencimientoPago } from './queue/correos.js';
 import { evaluarLiberacion, aceptarOferta, rechazarOferta, verOferta, ofrecerAMano, resumenEspera } from './espera.js';
 import { bandeja, correoDeLaBandeja, transporteInfo } from './mail/transporte.js';
+import { leerDia, diasGuardados, diaDeHoy, LOGS_DIR } from './log.js';
 
 class ApiError extends Error {
   constructor(status, message, extra = {}) {
@@ -984,6 +985,22 @@ export function adminMailOne({ params }) {
   const correo = correoDeLaBandeja(params.id);
   if (!correo) throw new ApiError(404, 'Ese correo ya no está en la bandeja.');
   return { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' }, body: correo.html };
+}
+
+/**
+ * La bitácora del día, para leerla desde el panel. En Render el disco es
+ * efímero y no hay forma de entrar por SSH, así que esta es la única
+ * ventana a lo que pasó.
+ */
+export function adminLogs({ query }) {
+  const dia = query.dia || diaDeHoy();
+  const datos = leerDia({
+    dia,
+    nivel: query.nivel || null,
+    buscar: query.buscar || null,
+    limite: Math.min(Number(query.limite) || 300, 2000)
+  });
+  return ok({ ...datos, dias: diasGuardados(), carpeta: LOGS_DIR });
 }
 
 /** Reintentar un trabajo fallido. */

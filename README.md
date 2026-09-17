@@ -312,6 +312,52 @@ alternativa en texto plano. Es exactamente lo que le llegaría al huésped.
 
 Agregar otro proveedor es un caso más en `server/mail/transporte.js`.
 
+## La bitácora
+
+Un archivo por día en `logs/AAAAMMDD.log`, una línea por suceso. Sirve para
+abrir el archivo del día en que algo salió mal y entender qué pasó sin
+adivinar.
+
+```
+[2026-09-16 20:49:35.963] INFO   actor=huésped@190.25.1.4  fn=createReservation
+  msg=POST /api/reservations  in={"body":{"name":"Altagracia Peña",…}}
+  out={"status":201,"reservation":{"ref":"GY-AQ7L","estado":"pendiente-pago"}}  ms=13
+```
+
+Cada línea trae **cuándo**, el **nivel** (`INFO`, `WARN`, `ERROR`), **quién**
+(`actor`), **en qué función** (`fn`), **con qué entró** (`in`) y **con qué salió**
+(`out`). Buscar es `grep`:
+
+```bash
+grep "GY-AQ7L" logs/20260916.log     # todo lo que le pasó a una reserva
+grep "ERROR" logs/*.log              # lo que se rompió
+grep "actor=equipo" logs/20260916.log  # lo que hizo el salón
+```
+
+Los actores que aparecen: `huésped@ip`, `equipo@ip` (el panel, con PIN),
+`mcp@ip`, `chat/Sofía`, `sistema/cola`, `sistema/correo` y `negocio` (los
+sucesos de la agenda: reserva creada, pago recibido, oferta aceptada).
+
+Tres cosas que la bitácora respeta:
+
+- **No escribe secretos.** Los tokens de las ofertas de lista de espera son
+  llaves —quien los lea se queda con la mesa— y el PIN abre la agenda entera.
+  Todo campo cuyo nombre suene a `token`, `pin`, `clave`, `password` o `apikey`
+  sale tapado como `abcd…«oculto:64»`: se ve que existía y cómo empezaba, pero
+  no sirve para nada. El código de la reserva **sí** se escribe: no es secreto
+  —va impreso en el correo— y es justo por lo que uno busca.
+- **Escribir no puede tumbar una petición.** Si el disco falla, se avisa una
+  vez por consola y la app sigue.
+- **Se recorta.** Entrada y salida se cortan a 1.200 caracteres y las listas
+  se resumen (`«265 elementos»`): una agenda entera en una línea vuelve el
+  archivo ilegible justo cuando más se necesita.
+
+Se guardan 30 días y los viejos se borran solos (`GUAYACAN_LOGS_DIAS`).
+
+En Render el disco es efímero y no hay SSH, así que además está la pestaña
+**Bitácora** del panel de sala, que lee el mismo archivo con filtro por nivel y
+búsqueda. Por debajo es `GET /api/admin/logs?dia=20260916&nivel=ERROR&buscar=GY-A3F9`.
+
 ## Desplegar en Render
 
 El repositorio trae [`render.yaml`](render.yaml): en Render, **New → Blueprint**,
@@ -329,6 +375,12 @@ Dos variables se ponen a mano en el panel de Render (nunca en el repo):
 | `REDIS_URL` | Redis para la cola. Sin ella, cola en memoria |
 | `RESEND_API_KEY` | Envío real de correos. Sin ella, bandeja |
 | `PUBLIC_URL` | La URL pública, para los enlaces de los correos |
+| `BREVO_API_KEY` | Envío real de correos por HTTP. Le escribe a cualquiera con solo verificar un remitente |
+| `MAIL_FROM` | El remitente, `Nombre <correo@dominio>`. Debe estar verificado en el proveedor |
+| `GUAYACAN_ESPERA_LARGA` | Minutos para responder una oferta si falta más de un día. Default 90 |
+| `GUAYACAN_ESPERA_CORTA` | Minutos si el servicio es hoy o mañana. Default 30 |
+| `GUAYACAN_PAGO_MINUTOS` | Minutos para pagar antes de soltar la mesa. `0` lo apaga. Default 30 |
+| `GUAYACAN_LOGS_DIAS` | Días de bitácora que se guardan. Default 30 |
 
 `HOST=0.0.0.0` y `NODE_ENV=production` ya vienen en el blueprint. `HOST` es
 obligatorio: atado a `127.0.0.1` el health check de Render nunca pasa.
@@ -341,6 +393,9 @@ obligatorio: atado a `127.0.0.1` el health check de Render nunca pasa.
   (plan pago) o mover `server/db.js` a una base de datos de verdad.
 - **En el plan gratuito el servicio se duerme** tras un rato sin tráfico, y la
   primera visita después tarda unos segundos en responder.
+- **La bitácora también se borra** en cada despliegue, por lo mismo. La
+  pestaña Bitácora del panel la lee mientras el proceso viva; para
+  conservarla hace falta un disco persistente o un servicio de logs.
 
 ## Comandos
 

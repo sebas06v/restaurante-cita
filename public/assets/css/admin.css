@@ -778,3 +778,27 @@
   background: color-mix(in oklab, var(--verde-500) 18%, transparent);
   color: #c6ecd8;
 }
+
+
+/* ── bitácora ───────────────────────────────────────────────────────────
+   Es un archivo de texto y se lee como tal: monoespaciada, sin cortar las
+   líneas (una línea = un suceso) y con scroll horizontal. Cortarlas sería
+   perder de vista qué campo es cuál. */
+.bitacora {
+  margin: 0;
+  padding: 14px 16px;
+  max-height: 68vh;
+  overflow: auto;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.65;
+  white-space: pre;
+  color: var(--paper-3);
+  tab-size: 2;
+}
+.bitacora .l-error { color: #ffb3a0; }
+.bitacora .l-warn { color: var(--maiz); }
+.bitacora .l-info { color: var(--paper-3); }
+.bitacora .l-fn { color: var(--gold-400); }
+.bitacora .l-hora { color: var(--muted-2); }
+.bitacora .vacio { color: var(--muted); font-family: var(--font-ui, inherit); }

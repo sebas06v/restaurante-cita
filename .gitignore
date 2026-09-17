@@ -16,3 +16,6 @@ Thumbs.db
 desktop.ini
 .DS_Store
 *.log
+
+# Bitácora: se genera sola, un archivo por día.
+logs/

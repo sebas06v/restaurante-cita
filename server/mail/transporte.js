@@ -29,6 +29,7 @@
 
 import { RESTAURANT } from '../config.js';
 import { db, write, nextId } from '../db.js';
+import { registrar } from '../log.js';
 
 const MAX_BANDEJA = 60; // correos guardados antes de botar los viejos
 
@@ -155,7 +156,16 @@ async function porResend({ para, asunto, html, texto }) {
  * Si falla, lanza: la cola reintenta, salvo que el error sea permanente.
  */
 export async function enviar({ para, asunto, html, texto, tipo, code }) {
-  if (!para) throw new Error('El correo no tiene destinatario.');
+  if (!para) {
+    registrar({
+      nivel: 'ERROR',
+      actor: 'sistema/correo',
+      fn: 'enviar',
+      msg: 'correo sin destinatario',
+      entrada: { tipo, code, asunto }
+    });
+    throw new Error('El correo no tiene destinatario.');
+  }
 
   if (MODO === 'smtp') return porSmtp({ para, asunto, html, texto });
   if (MODO === 'brevo') return porBrevo({ para, asunto, html, texto });

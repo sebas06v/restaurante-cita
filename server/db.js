@@ -103,4 +103,29 @@ export function logEvent(entry) {
   const d = db();
   d.log.push({ at: new Date().toISOString(), ...entry });
   if (d.log.length > 2000) d.log.splice(0, d.log.length - 2000);
+
+  // El mismo suceso, en el archivo del día. Se carga con import() porque
+  // log.js no puede depender de db.js ni al revés en tiempo de carga.
+  registrarSuceso(entry);
+}
+
+/**
+ * Puente hacia la bitácora. Se resuelve una vez y se guarda: un import()
+ * por cada reserva sería un desperdicio.
+ */
+let escribirEnBitacora = null;
+function registrarSuceso(entry) {
+  const { action, ...resto } = entry;
+  if (escribirEnBitacora) {
+    escribirEnBitacora({ actor: 'negocio', fn: action, entrada: resto });
+    return;
+  }
+  import('./log.js')
+    .then((log) => {
+      escribirEnBitacora = log.registrar;
+      escribirEnBitacora({ actor: 'negocio', fn: action, entrada: resto });
+    })
+    .catch(() => {
+      /* si la bitácora no carga, la app sigue: el suceso ya quedó en la base */
+    });
 }

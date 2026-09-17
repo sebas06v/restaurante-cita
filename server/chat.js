@@ -31,6 +31,7 @@ import {
 } from './config.js';
 import { todayISO, addDays, prettyDate, weekday } from './time.js';
 import * as api from './api.js';
+import { registrar } from './log.js';
 
 const BASE = (process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1').replace(/\/$/, '');
 const MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
@@ -208,6 +209,32 @@ const TOOL_LABELS = {
 
 /** Respuestas compactas: el modelo redacta, la herramienta solo aporta hechos. */
 async function runTool(name, input) {
+  const arranque = Date.now();
+  try {
+    const salida = await despacharHerramienta(name, input);
+    registrar({
+      actor: 'chat/Sofía',
+      fn: `herramienta.${name}`,
+      entrada: input,
+      salida,
+      ms: Date.now() - arranque
+    });
+    return salida;
+  } catch (err) {
+    registrar({
+      nivel: 'ERROR',
+      actor: 'chat/Sofía',
+      fn: `herramienta.${name}`,
+      msg: err.message,
+      entrada: input,
+      salida: { status: err.status },
+      ms: Date.now() - arranque
+    });
+    throw err;
+  }
+}
+
+async function despacharHerramienta(name, input) {
   switch (name) {
     case 'consultar_disponibilidad': {
       const { json } = api.getAvailability({
