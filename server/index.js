@@ -367,7 +367,13 @@ server.listen(PORT, HOST, () => {
   const cola = colaInfo();
   const correo = transporteInfo();
   console.log(
-    `  Cola de correos ${cola.modo === 'bullmq' ? 'BullMQ sobre Redis' : 'en memoria · sin REDIS_URL'} · envío: ${correo.modo}`
+    `  Cola de correos ${
+      cola.modo === 'bullmq'
+        ? 'BullMQ sobre Redis · sobrevive un reinicio'
+        : cola.intentoRedis
+          ? 'en memoria · HABÍA REDIS_URL pero no conectó (ver el error arriba)'
+          : 'en memoria · sin REDIS_URL'
+    } · envío: ${correo.modo}`
   );
   console.log('');
 });

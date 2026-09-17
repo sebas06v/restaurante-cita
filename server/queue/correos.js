@@ -41,6 +41,16 @@ const OPCIONES = {
 
 let cola = null;
 let worker = null;
+let clientes = [];
+
+/** Un error de Redis se dice una vez por fuente, no cuarenta veces. */
+const quejas = new Set();
+function quejarse(de, err) {
+  const clave = `${de}:${err.message}`;
+  if (quejas.has(clave)) return;
+  quejas.add(clave);
+  console.error(`[correos] ${de}: ${err.message}`);
+}
 let modo = 'memoria';
 let arrancada = false;
 
@@ -171,21 +181,56 @@ export async function iniciarCola() {
 
   try {
     const { Queue, Worker } = await import('bullmq');
-    const connection = { url: REDIS_URL, maxRetriesPerRequest: null };
+    const { default: IORedis } = await import('ioredis');
 
-    cola = new Queue(NOMBRE, { connection, defaultJobOptions: OPCIONES });
-    worker = new Worker(NOMBRE, async (job) => procesar(job.data), { connection, concurrency: 4 });
+    // La URL hay que dársela a ioredis como cadena: dentro del objeto de
+    // opciones la ignora y se va a localhost sin clave ni TLS. Y cada cliente
+    // es suyo: el worker bloquea su conexión esperando trabajos, así que
+    // compartirla dejaría a la cola sin poder hablar.
+    const cliente = () => {
+      const c = new IORedis(REDIS_URL, {
+        maxRetriesPerRequest: null, // lo exige BullMQ
+        enableReadyCheck: false, // Upstash y compañía no contestan INFO
+        // Se rinde a los ~15 s. Sin tope, una URL mala reintenta para
+        // siempre y llena la consola de ECONNREFUSED.
+        retryStrategy: (intento) => (intento > 6 ? null : Math.min(intento * 500, 3000))
+      });
+      // ioredis sin este manejador lanza el error suelto y ensucia la salida
+      // con un stack crudo. Basta con decirlo una vez.
+      c.on('error', (err) => quejarse('Redis', err));
+      return c;
+    };
+
+    clientes = [cliente(), cliente()];
+    cola = new Queue(NOMBRE, { connection: clientes[0], defaultJobOptions: OPCIONES });
+    worker = new Worker(NOMBRE, async (job) => procesar(job.data), {
+      connection: clientes[1],
+      concurrency: 4
+    });
 
     worker.on('failed', (job, err) => {
       console.error(`[correos] falló ${job?.data?.tipo} de ${job?.data?.code}: ${err.message}`);
     });
-    worker.on('error', (err) => console.error('[correos] error del worker:', err.message));
+    // Sin manejador, BullMQ deja escapar el error de sus conexiones internas
+    // y Node lo imprime como stack crudo.
+    worker.on('error', (err) => quejarse('worker', err));
+    cola.on('error', (err) => quejarse('cola', err));
 
-    // Que no se quede colgado si Redis no responde: se prueba la conexión.
-    await cola.waitUntilReady();
+    // Que no se quede colgado si Redis no responde: se prueba la conexión,
+    // con un tope. Sin esto, una URL mala deja el arranque esperando para
+    // siempre y la app nunca contesta.
+    await Promise.race([
+      cola.waitUntilReady(),
+      new Promise((_, no) => setTimeout(() => no(new Error('no contestó en 10 s')), 10000).unref?.())
+    ]);
     modo = 'bullmq';
   } catch (err) {
     console.error(`[correos] no se pudo conectar a Redis (${err.message}); sigo en memoria.`);
+    // Primero se calla el worker, que es el que reintenta; después los
+    // clientes. Al revés, el worker vuelve a abrir conexión.
+    await worker?.close(true).catch(() => {});
+    for (const c of clientes) c.disconnect();
+    clientes = [];
     cola = null;
     worker = null;
     modo = 'memoria';
@@ -197,6 +242,8 @@ export async function iniciarCola() {
 export async function cerrarCola() {
   await worker?.close();
   await cola?.close();
+  await Promise.all(clientes.map((c) => c.quit().catch(() => c.disconnect())));
+  clientes = [];
 }
 
 /* ═══════════════════════════════════════════════════════ encolar trabajos */
@@ -324,4 +371,4 @@ export async function reintentar(id) {
   return { reintentado: id };
 }
 
-export const colaInfo = () => ({ modo, persistente: modo === 'bullmq' });
+export const colaInfo = () => ({ modo, persistente: modo === 'bullmq', intentoRedis: Boolean(REDIS_URL) });
