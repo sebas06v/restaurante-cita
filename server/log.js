@@ -66,6 +66,69 @@ const esProhibido = (llave) => {
   return PROHIBIDOS.some((p) => k.includes(p));
 };
 
+/* ─────────────────────────────────────────────── datos de los huéspedes ── */
+
+/**
+ * Los datos personales NO se copian al log.
+ *
+ * El huésped entregó su nombre, su teléfono y su correo para reservar una
+ * mesa, no para quedar en un archivo de texto que vive treinta días y que
+ * abre cualquiera que entre al servidor. Y las notas son campo libre: ahí
+ * la gente escribe alergias, embarazos, silla de ruedas. Eso es información
+ * de salud y no tiene por qué estar aquí.
+ *
+ * Pero un log donde no se sepa de quién se habla no sirve para investigar.
+ * El equilibrio: se guarda lo justo para reconocer y cruzar —iniciales,
+ * últimos cuatro del teléfono, el dominio del correo— y el código de la
+ * reserva, que es la llave para ir a buscar los datos completos a la base,
+ * que es donde sí corresponde que estén.
+ *
+ * Cada entrada es el nombre del campo, en español y en inglés, porque el
+ * chat y el MCP hablan en español y la API en inglés.
+ */
+const PERSONALES = {
+  name: iniciales,
+  nombre: iniciales,
+  email: correoParcial,
+  correo: correoParcial,
+  para: correoParcial,
+  to: correoParcial,
+  from: correoParcial,
+  remitente: correoParcial,
+  phone: ultimosDelTelefono,
+  telefono: ultimosDelTelefono,
+  notes: textoLibre,
+  notas: textoLibre,
+  observaciones: textoLibre
+};
+
+/** «Rosa Emilia Batista» → «Rosa E. B.». Reconocible, no es un directorio. */
+function iniciales(valor) {
+  const partes = String(valor).trim().split(/\s+/).filter(Boolean);
+  if (!partes.length) return '«—»';
+  return [partes[0], ...partes.slice(1).map((p) => `${p[0]}.`)].join(' ');
+}
+
+/** El dominio se queda: sirve para diagnosticar entregas. El resto no. */
+function correoParcial(valor) {
+  const m = String(valor).match(/([^\s<]+)@([^\s>]+)/);
+  if (!m) return '«correo»';
+  return `${m[1].slice(0, 1)}***@${m[2]}`;
+}
+
+/** Los últimos cuatro alcanzan para cotejar con el huésped al teléfono. */
+function ultimosDelTelefono(valor) {
+  const digitos = String(valor).replace(/\D/g, '');
+  return digitos.length < 4 ? '«tel»' : `***${digitos.slice(-4)}`;
+}
+
+/** Campo libre: ahí va lo más delicado. No se copia nada, solo el tamaño. */
+function textoLibre(valor) {
+  return String(valor).trim() ? `«texto libre: ${String(valor).length} car.»` : '';
+}
+
+/* ─────────────────────────────────────────────────────────── secretos ── */
+
 /**
  * Deja ver que el dato existía y cómo empezaba, sin entregarlo. Un token
  * cortado no abre nada, pero sirve para cruzarlo con otra línea del log.
@@ -94,7 +157,15 @@ export function limpiar(valor, profundidad = 0) {
 
   const salida = {};
   for (const [k, v] of Object.entries(valor)) {
-    salida[k] = esProhibido(k) ? tapar(v) : limpiar(v, profundidad + 1);
+    const comoPersonal = PERSONALES[String(k).toLowerCase()];
+    // El enmascarado personal es para valores sueltos. Un campo que se llame
+    // «correo» pero traiga un objeto es un contenedor —el correo armado, por
+    // ejemplo—: ahí hay que entrar, no taparlo entero.
+    const esValorSuelto = v !== null && v !== '' && v !== undefined && typeof v !== 'object';
+
+    if (esProhibido(k)) salida[k] = tapar(v);
+    else if (comoPersonal && esValorSuelto) salida[k] = comoPersonal(v);
+    else salida[k] = limpiar(v, profundidad + 1);
   }
   return salida;
 }

@@ -338,8 +338,16 @@ Los actores que aparecen: `huésped@ip`, `equipo@ip` (el panel, con PIN),
 `mcp@ip`, `chat/Sofía`, `sistema/cola`, `sistema/correo` y `negocio` (los
 sucesos de la agenda: reserva creada, pago recibido, oferta aceptada).
 
-Tres cosas que la bitácora respeta:
+Cuatro cosas que la bitácora respeta:
 
+- **No escribe los datos del huésped.** Entregó su nombre, su teléfono y su
+  correo para reservar una mesa, no para quedar en un archivo de texto que
+  vive treinta días y que abre cualquiera que entre al servidor. Queda lo
+  justo para reconocer y cruzar —`Rosa E. B.`, `***1234`, `r***@correo.com`— y
+  el código de la reserva, que es la llave para buscar los datos completos en
+  la base, que es donde sí corresponde que estén. Las notas del huésped no se
+  copian en absoluto (`«texto libre: 42 car.»`): ahí la gente escribe
+  alergias, embarazos, silla de ruedas, y eso es información de salud.
 - **No escribe secretos.** Los tokens de las ofertas de lista de espera son
   llaves —quien los lea se queda con la mesa— y el PIN abre la agenda entera.
   Todo campo cuyo nombre suene a `token`, `pin`, `clave`, `password` o `apikey`

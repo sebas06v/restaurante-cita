@@ -354,7 +354,10 @@ const server = http.createServer(async (req, res) => {
     registrar({
       actor,
       fn,
-      msg: `${req.method} ${pathname}`,
+      // El patrón de la ruta, no la ruta concreta: en /api/espera/:token el
+      // token ES la llave de la mesa, y la URL lo lleva a la vista. Los
+      // valores ya van en `in`, donde sí pasan por el enmascarado.
+      msg: `${req.method} ${found.pattern}`,
       entrada: { params: found.params, query, body },
       // Un archivo (CSV, ICS, HTML de un correo) no se vuelca al log: se
       // dice qué era y cuánto pesaba.
@@ -406,7 +409,11 @@ function resumenDeSalida(json) {
   if (!json || typeof json !== 'object') return {};
   const salida = {};
   for (const [k, v] of Object.entries(json)) {
-    if (Array.isArray(v)) salida[k] = `«${v.length} elementos»`;
+    // Los mensajes son texto libre escrito para el huésped, y ahí se cuela
+    // su nombre («Le salió el correo a Rosa Batista»). No aportan nada que
+    // no diga ya el estado, así que no se copian.
+    if (k === 'message' || k === 'mensaje') salida[k] = '«mensaje»';
+    else if (Array.isArray(v)) salida[k] = `«${v.length} elementos»`;
     else if (v && typeof v === 'object') {
       // De los objetos grandes, lo que identifica: código o id. El código
       // de una reserva no es secreto —va impreso en el correo— y es
