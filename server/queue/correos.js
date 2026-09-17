@@ -43,6 +43,12 @@ let cola = null;
 let worker = null;
 let clientes = [];
 
+/**
+ * Un identificador de trabajo que BullMQ acepte: rechaza los dos puntos,
+ * y las horas los llevan. Sirve para no encolar dos veces lo mismo.
+ */
+const idDeTrabajo = (...partes) => partes.join('-').replace(/:/g, '');
+
 /** Un error de Redis se dice una vez por fuente, no cuarenta veces. */
 const quejas = new Set();
 function quejarse(de, err) {
@@ -253,7 +259,9 @@ async function encolarDatos(datos, opts = {}) {
     if (cola) return await cola.add(datos.tipo, datos, opts);
     return await memoria.add(datos.tipo, datos, opts);
   } catch (err) {
-    console.error(`[correos] no pude encolar ${datos.tipo}: ${err.message}`);
+    // Se traga el error a propósito —una reserva no se cae porque el correo
+    // no salga— pero tiene que quedar dicho, no desaparecer.
+    console.error(`[correos] NO se encoló ${datos.tipo}${datos.code ? ` de ${datos.code}` : ''}: ${err.message}`);
     return null;
   }
 }
@@ -292,7 +300,7 @@ export async function programarVencimientoOferta({ entryId, offerId, delay }) {
   if (delay <= 0) return null;
   return encolarDatos(
     { tipo: 'vencer-oferta', entryId, offerId },
-    { delay, jobId: `vencer-oferta:${offerId}`, attempts: 2 }
+    { delay, jobId: idDeTrabajo('vencer-oferta', offerId), attempts: 2 }
   );
 }
 
@@ -308,7 +316,7 @@ export async function programarVencimientoPago(reservation) {
 
   return encolarDatos(
     { tipo: 'vencer-pago', code: reservation.code },
-    { delay, jobId: `vencer-pago:${reservation.code}`, attempts: 2 }
+    { delay, jobId: idDeTrabajo('vencer-pago', reservation.code), attempts: 2 }
   );
 }
 
@@ -327,7 +335,7 @@ export async function programarRecordatorio(reservation) {
 
   return encolar('recordatorio', reservation.code, {
     delay: retraso,
-    jobId: `recordatorio:${reservation.code}:${reservation.date}:${reservation.time}`
+    jobId: idDeTrabajo('recordatorio', reservation.code, reservation.date, reservation.time)
   });
 }
 
